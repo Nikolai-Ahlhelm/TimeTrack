@@ -16,7 +16,7 @@ through creating the admin account.
 
 | Layer      | Choice                                                          |
 |------------|------------------------------------------------------------------|
-| Backend    | Node.js 20 + TypeScript + Express                                |
+| Backend    | Node.js 22 + TypeScript + Express                                |
 | Database   | SQLite (`better-sqlite3`), file-based, single volume              |
 | Auth       | JWT in an httpOnly cookie, `bcryptjs` password hashing            |
 | Frontend   | React + Vite + TypeScript + Tailwind CSS + React Router           |
@@ -172,10 +172,14 @@ docker build -t timetrack .
 docker run -d -p 4000:4000 -e JWT_SECRET="<a long random secret>" \
   -v timetrack-data:/app/data timetrack
 ```
-or via Compose (reads `JWT_SECRET` from your shell or a `.env` file):
+or via Compose:
 ```bash
-JWT_SECRET="<a long random secret>" docker compose up -d --build
+docker compose up -d
 ```
+[`docker-compose.yml`](docker-compose.yml) pulls the pre-built GHCR image by
+default (swap `image:` for `build: .` to build from source). Edit the
+`JWT_SECRET` value in the file before starting, or override it with a
+`.env` file / `JWT_SECRET=... docker compose up -d`.
 
 ### CI/CD
 `.github/workflows/docker-publish.yml` builds the Docker image and pushes it
@@ -195,7 +199,50 @@ to GHCR (`ghcr.io/<owner>/<repo>:latest` and `:<short-sha>`) on every push to
 | `COOKIE_SECURE`  | `true` in prod                    | Set to `false` to allow non-HTTPS prod testing |
 | `CLIENT_ORIGIN`  | `http://localhost:5173`           | Dev-mode CORS origin for the Vite server |
 
-## 7. Not yet implemented (future work)
+## 7. Working in this repo (for coding agents)
+
+**No test suite or linter exists yet.** Verify changes with:
+```bash
+cd server && npm run typecheck   # tsc --noEmit
+cd client && npm run typecheck   # tsc --noEmit
+cd server && npm run build       # full compile + schema.sql copy, catches more
+cd client && npm run build       # tsc --noEmit && vite build
+```
+For anything touching request/response behavior, also smoke-test with
+`./dev.ps1` (Windows) or run `server`/`client` dev servers manually with
+`npm run dev` in each directory (works cross-platform; only the `.ps1`
+convenience scripts are Windows-only).
+
+**Server build has a non-obvious step:** `server/package.json`'s `build`
+script runs `tsc` *and then* copies `src/db/schema.sql` into `dist/db/`,
+because `tsc` only emits `.ts` files. If you add other non-`.ts` runtime
+assets under `server/src/`, extend that copy step the same way — anything
+missed here works in dev (where `src/` is read directly via `tsx`) but
+breaks silently in the Docker image, which only ships `dist/`.
+
+**`better-sqlite3` needs a native build toolchain on Alpine.** It has no
+prebuilt binary for musl/Node 22, so `npm ci` compiles it via `node-gyp`,
+which needs `python3 make g++`. The `Dockerfile`'s `server-build` and
+`runtime` stages install these with `apk add` (and `runtime` removes them
+again afterward via a `.build-deps` virtual package). If you change the
+base image or add other native deps, keep this in mind.
+
+**Conventions:**
+- Backend routes are grouped by resource under `server/src/routes/`; add new
+  endpoints there and register them in `server/src/index.ts`.
+- Schema changes: add nullable columns via `applyIncrementalMigrations()` in
+  `server/src/db/db.ts` (existing DBs upgrade automatically on startup) *and*
+  add the column to `schema.sql` (covers fresh databases) — both are needed,
+  see §3.
+- Frontend API calls go through the typed client in `client/src/api/`, not
+  ad-hoc `fetch()` calls in components.
+- Match existing formatting (2-space indent, double quotes, semicolons)
+  rather than reformatting unrelated code — there's no Prettier/ESLint
+  config to defer to.
+- `data/` (SQLite file) and both `node_modules/` and `dist/` are gitignored;
+  don't commit build output or the local database.
+
+## 8. Not yet implemented (future work)
 - Monthly/yearly overtime rollups and historical reporting beyond the
   current dashboard view (daily/weekly overtime is implemented — see §3).
 - Bulk entry editing / multi-select delete.
