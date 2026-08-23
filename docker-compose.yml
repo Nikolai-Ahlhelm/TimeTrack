@@ -1,16 +1,15 @@
 services:
   timetrack:
-    build: .
-    image: timetrack:local
+    image: ghcr.io/nikolai-ahlhelm/timetrack:latest
+    # Or build from source instead of using the published image:
+    # build: .
+    restart: unless-stopped
     ports:
       - "4000:4000"
     environment:
-      - PORT=4000
-      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in your environment or a .env file}
-      - COOKIE_SECURE=${COOKIE_SECURE:-true}
+      JWT_SECRET: "<a long random secret>"
     volumes:
       - timetrack-data:/app/data
-    restart: unless-stopped
 
 volumes:
   timetrack-data:

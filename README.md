@@ -28,3 +28,13 @@ docker run -d -p 4000:4000 -e JWT_SECRET="<a long random secret>" \
 
 Pre-built images are published to GHCR on every push to `main` via GitHub
 Actions.
+
+**Production, with Docker Compose**:
+```bash
+docker compose up -d
+```
+Uses the template [docker-compose.yml](docker-compose.yml), which pulls the
+pre-built GHCR image. Set a real `JWT_SECRET` before starting, and swap
+`image: ghcr.io/nikolai-ahlhelm/timetrack:latest` for `build: .` if you'd
+rather build from source. Then open http://localhost:4000 and complete the
+first-launch admin setup.
