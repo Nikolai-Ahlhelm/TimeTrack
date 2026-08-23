@@ -10,6 +10,7 @@ RUN npm run build
 
 # --- Stage 2: build server ---------------------------------------------------
 FROM node:22-alpine AS server-build
+RUN apk add --no-cache python3 make g++
 WORKDIR /app/server
 COPY server/package*.json ./
 RUN npm ci
@@ -22,7 +23,9 @@ ENV NODE_ENV=production
 WORKDIR /app/server
 
 COPY server/package*.json ./
-RUN npm ci --omit=dev
+RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+    && npm ci --omit=dev \
+    && apk del .build-deps
 
 COPY --from=server-build /app/server/dist ./dist
 COPY --from=client-build /app/client/dist ../client/dist
