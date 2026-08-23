@@ -1,11 +1,17 @@
-import type { SortOption } from "../api/types";
+import type { DayStatus, SortOption, Tag } from "../api/types";
+import TagBadge from "./TagBadge";
+import DayStatusBadge from "./DayStatusBadge";
 
 export interface Filters {
   from: string;
   to: string;
   q: string;
   sort: SortOption;
+  tagId?: number;
+  dayStatus?: DayStatus;
 }
+
+const DAY_STATUS_OPTIONS: DayStatus[] = ["sick", "vacation"];
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "date_desc", label: "Newest first" },
@@ -14,14 +20,70 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "hours_asc", label: "Fewest hours first" },
 ];
 
+const QUICK_RANGES = [7, 14, 30];
+
+function toDateStr(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function lastNDays(n: number): { from: string; to: string } {
+  const to = new Date();
+  const from = new Date();
+  from.setDate(from.getDate() - (n - 1));
+  return { from: toDateStr(from), to: toDateStr(to) };
+}
+
+function monthRange(monthStr: string): { from: string; to: string } {
+  const [year, month] = monthStr.split("-").map(Number);
+  const from = new Date(year, month - 1, 1);
+  const to = new Date(year, month, 0);
+  return { from: toDateStr(from), to: toDateStr(to) };
+}
+
 interface Props {
   filters: Filters;
   onChange: (filters: Filters) => void;
+  tags: Tag[];
 }
 
-export default function FilterBar({ filters, onChange }: Props) {
+export default function FilterBar({ filters, onChange, tags }: Props) {
+  const activeQuickDays = QUICK_RANGES.find((n) => {
+    const { from, to } = lastNDays(n);
+    return filters.from === from && filters.to === to;
+  });
+  const currentMonth = filters.from && filters.to && filters.from === monthRange(filters.from.slice(0, 7)).from
+    ? filters.from.slice(0, 7)
+    : "";
+
   return (
     <div className="panel flex flex-wrap items-end gap-3 p-4">
+      <div>
+        <label className="field-label">Quick select</label>
+        <div className="mt-1 flex gap-1">
+          {QUICK_RANGES.map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onChange({ ...filters, ...lastNDays(n) })}
+              className={`btn-ghost px-2 py-1 text-xs ${activeQuickDays === n ? "bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300" : ""}`}
+            >
+              {n}d
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label className="field-label">Month</label>
+        <input
+          type="month"
+          value={currentMonth}
+          onChange={(e) => onChange({ ...filters, ...monthRange(e.target.value) })}
+          className="field-sm mt-1"
+        />
+      </div>
       <div>
         <label className="field-label">From</label>
         <input
@@ -64,8 +126,50 @@ export default function FilterBar({ filters, onChange }: Props) {
           ))}
         </select>
       </div>
-      {(filters.from || filters.to || filters.q) && (
-        <button onClick={() => onChange({ from: "", to: "", q: "", sort: filters.sort })} className="btn-ghost">
+      {tags.length > 0 && (
+        <div>
+          <label className="field-label">Tag</label>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {tags.map((tag) => (
+              <button
+                key={tag.id}
+                type="button"
+                onClick={() => onChange({ ...filters, tagId: filters.tagId === tag.id ? undefined : tag.id })}
+                className={filters.tagId === tag.id ? "" : "opacity-50 hover:opacity-100"}
+              >
+                <TagBadge tag={tag} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div>
+        <label className="field-label">Day status</label>
+        <div className="mt-1 flex flex-wrap gap-1">
+          <button
+            type="button"
+            onClick={() => onChange({ ...filters, dayStatus: undefined })}
+            className={`btn-ghost px-2 py-1 text-xs ${filters.dayStatus === undefined ? "bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300" : ""}`}
+          >
+            All
+          </button>
+          {DAY_STATUS_OPTIONS.map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => onChange({ ...filters, dayStatus: filters.dayStatus === status ? undefined : status })}
+              className={filters.dayStatus === status ? "" : "opacity-50 hover:opacity-100"}
+            >
+              <DayStatusBadge status={status} />
+            </button>
+          ))}
+        </div>
+      </div>
+      {(filters.from || filters.to || filters.q || filters.tagId !== undefined || filters.dayStatus !== undefined) && (
+        <button
+          onClick={() => onChange({ from: "", to: "", q: "", sort: filters.sort, tagId: undefined, dayStatus: undefined })}
+          className="btn-ghost"
+        >
           Clear
         </button>
       )}

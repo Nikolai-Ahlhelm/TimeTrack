@@ -40,10 +40,13 @@ Write-Host "  App:      http://localhost:5173" -ForegroundColor Gray
 Write-Host "  Dev user: dev / dev" -ForegroundColor Gray
 Write-Host ""
 
-$serverJob = Start-Process -FilePath "npm" -ArgumentList "run", "dev" `
+$npmCmd = (Get-Command "npm.cmd" -ErrorAction SilentlyContinue).Source
+if (-not $npmCmd) { $npmCmd = (Get-Command "npm" -ErrorAction Stop).Source }
+
+$serverJob = Start-Process -FilePath $npmCmd -ArgumentList "run", "dev" `
     -WorkingDirectory (Join-Path $root "server") -PassThru -NoNewWindow
 
-$clientJob = Start-Process -FilePath "npm" -ArgumentList "run", "dev" `
+$clientJob = Start-Process -FilePath $npmCmd -ArgumentList "run", "dev" `
     -WorkingDirectory (Join-Path $root "client") -PassThru -NoNewWindow
 
 try {

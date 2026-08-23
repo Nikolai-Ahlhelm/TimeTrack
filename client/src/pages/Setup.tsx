@@ -39,8 +39,8 @@ export default function Setup() {
         <ThemeToggle />
       </div>
       <div className="panel w-full max-w-md p-8">
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Welcome to TimeTrack</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-neutral-100">Welcome to TimeTrack</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-neutral-400">
           This is the first launch of the application. Create the administrator account to get started.
         </p>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">

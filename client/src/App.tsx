@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import Setup from "./pages/Setup";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import CalendarPage from "./pages/Calendar";
 import Admin from "./pages/Admin";
 import Settings from "./pages/Settings";
 
@@ -46,6 +47,14 @@ export default function App() {
           element={
             <Gate>
               <Dashboard />
+            </Gate>
+          }
+        />
+        <Route
+          path="/calendar"
+          element={
+            <Gate>
+              <CalendarPage />
             </Gate>
           }
         />

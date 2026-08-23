@@ -1,7 +1,30 @@
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../api/client";
-import type { User } from "../api/types";
+import type { BreakRule, User } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
+import { describeBreakRules } from "../lib/time";
+
+// Compact "afterHours:breakMinutes" pairs, e.g. "6:30, 9:45" <-> BreakRule[],
+// used for the plain-prompt admin editor below.
+function breakRulesToText(rules: BreakRule[] | null): string {
+  if (!rules || rules.length === 0) return "";
+  return rules.map((r) => `${r.afterMinutes / 60}:${r.breakMinutes}`).join(", ");
+}
+
+function parseBreakRulesText(text: string): BreakRule[] | null {
+  const trimmed = text.trim();
+  if (trimmed === "") return null;
+  const rules = trimmed.split(",").map((part) => {
+    const [hoursStr, minutesStr] = part.trim().split(":");
+    const afterMinutes = Math.round(Number(hoursStr) * 60);
+    const breakMinutes = Math.round(Number(minutesStr));
+    if (!Number.isFinite(afterMinutes) || afterMinutes < 0 || !Number.isFinite(breakMinutes) || breakMinutes < 0) {
+      throw new Error(`Invalid rule "${part.trim()}" — use "hours:minutes" e.g. "6:30"`);
+    }
+    return { afterMinutes, breakMinutes };
+  });
+  return rules;
+}
 
 export default function UserManager() {
   const [users, setUsers] = useState<User[]>([]);
@@ -82,6 +105,23 @@ export default function UserManager() {
     await load();
   }
 
+  async function editBreakRules(u: User) {
+    const next = prompt(
+      `Break time rules for ${u.username} — comma-separated "hours worked:break minutes" pairs (e.g. "6:30, 9:45"). Leave blank to disable and use the flat default break only.`,
+      breakRulesToText(u.breakRules)
+    );
+    if (next === null) return;
+    let breakRules: BreakRule[] | null;
+    try {
+      breakRules = parseBreakRulesText(next);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Invalid break rules");
+      return;
+    }
+    await api.users.update(u.id, { breakRules });
+    await load();
+  }
+
   async function removeUser(u: User) {
     if (!confirm(`Delete user "${u.username}"? This also deletes their time entries.`)) return;
     await api.users.remove(u.id);
@@ -91,7 +131,7 @@ export default function UserManager() {
   return (
     <div className="space-y-6">
       <div className="panel p-5">
-        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Add user</h2>
+        <h2 className="text-sm font-semibold text-slate-900 dark:text-neutral-100">Add user</h2>
         <form onSubmit={handleCreate} className="mt-3 flex flex-wrap items-end gap-3">
           <div>
             <label className="field-label">Username</label>
@@ -130,28 +170,29 @@ export default function UserManager() {
       </div>
 
       <div className="panel overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
-          <thead className="bg-slate-50 dark:bg-slate-800/50">
+        <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-neutral-800">
+          <thead className="bg-slate-50 dark:bg-neutral-800/50">
             <tr>
-              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Username</th>
-              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Display name</th>
-              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Role</th>
-              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Status</th>
-              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Daily target</th>
-              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-slate-400">Break</th>
+              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Username</th>
+              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Display name</th>
+              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Role</th>
+              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Status</th>
+              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Daily target</th>
+              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Break</th>
+              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Break rules</th>
               <th className="px-3 py-2.5" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+          <tbody className="divide-y divide-slate-100 dark:divide-neutral-800">
             {users.map((u) => (
               <tr key={u.id}>
-                <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-100">{u.username}</td>
-                <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{u.displayName}</td>
+                <td className="px-3 py-2 font-medium text-slate-800 dark:text-neutral-100">{u.username}</td>
+                <td className="px-3 py-2 text-slate-600 dark:text-neutral-300">{u.displayName}</td>
                 <td className="px-3 py-2">
                   <button
                     onClick={() => toggleRole(u)}
                     disabled={u.id === currentUser?.id}
-                    className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-200 disabled:opacity-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                    className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-200 disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700"
                   >
                     {u.role}
                   </button>
@@ -163,7 +204,7 @@ export default function UserManager() {
                     className={`rounded-full px-2 py-0.5 text-xs font-medium disabled:opacity-50 ${
                       u.isActive
                         ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
-                        : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                        : "bg-slate-100 text-slate-500 dark:bg-neutral-800 dark:text-neutral-400"
                     }`}
                   >
                     {u.isActive ? "Active" : "Disabled"}
@@ -172,7 +213,7 @@ export default function UserManager() {
                 <td className="px-3 py-2">
                   <button
                     onClick={() => editDailyTarget(u)}
-                    className="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400"
+                    className="text-slate-600 hover:text-brand-600 dark:text-neutral-300 dark:hover:text-brand-400"
                   >
                     {u.dailyTargetMinutes != null ? `${u.dailyTargetMinutes / 60}h/day` : "Not set"}
                   </button>
@@ -180,9 +221,17 @@ export default function UserManager() {
                 <td className="px-3 py-2">
                   <button
                     onClick={() => editDefaultBreak(u)}
-                    className="text-slate-600 hover:text-brand-600 dark:text-slate-300 dark:hover:text-brand-400"
+                    className="text-slate-600 hover:text-brand-600 dark:text-neutral-300 dark:hover:text-brand-400"
                   >
                     {u.defaultBreakMinutes} min
+                  </button>
+                </td>
+                <td className="px-3 py-2">
+                  <button
+                    onClick={() => editBreakRules(u)}
+                    className="text-slate-600 hover:text-brand-600 dark:text-neutral-300 dark:hover:text-brand-400"
+                  >
+                    {describeBreakRules(u.breakRules)}
                   </button>
                 </td>
                 <td className="space-x-3 px-3 py-2 text-right">
@@ -192,7 +241,7 @@ export default function UserManager() {
                   <button
                     onClick={() => removeUser(u)}
                     disabled={u.id === currentUser?.id}
-                    className="text-xs font-medium text-slate-400 hover:text-red-600 disabled:opacity-50 dark:text-slate-500 dark:hover:text-red-400"
+                    className="text-xs font-medium text-slate-400 hover:text-red-600 disabled:opacity-50 dark:text-neutral-500 dark:hover:text-red-400"
                   >
                     Delete
                   </button>

@@ -13,6 +13,8 @@ import { entriesRouter } from "./routes/entries.js";
 import { usersRouter } from "./routes/users.js";
 import { settingsRouter } from "./routes/settings.js";
 import { profileRouter } from "./routes/profile.js";
+import { tagsRouter } from "./routes/tags.js";
+import { dayLabelsRouter } from "./routes/dayLabels.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -40,6 +42,8 @@ app.use("/api/entries", entriesRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/settings", settingsRouter);
 app.use("/api/profile", profileRouter);
+app.use("/api/tags", tagsRouter);
+app.use("/api/day-labels", dayLabelsRouter);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 

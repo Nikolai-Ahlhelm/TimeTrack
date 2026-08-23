@@ -1,4 +1,4 @@
-import type { TimeEntry, User, SortOption } from "./types";
+import type { TimeEntry, User, SortOption, DateFormat, Tag, BreakRule, DayLabel, DayStatus } from "./types";
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -48,7 +48,7 @@ export const api = {
     me: () => request<{ user: User }>("/auth/me"),
   },
   entries: {
-    list: (params: { from?: string; to?: string; q?: string; sort?: SortOption } = {}) => {
+    list: (params: { from?: string; to?: string; q?: string; sort?: SortOption; tagId?: number } = {}) => {
       const search = toSearchParams(params);
       return request<{ entries: TimeEntry[] }>(`/entries${search ? `?${search}` : ""}`);
     },
@@ -57,13 +57,35 @@ export const api = {
     stop: () => request<{ entry: TimeEntry }>("/entries/stop", { method: "POST" }),
     update: (
       id: number,
-      data: Partial<Pick<TimeEntry, "workDate" | "startTime" | "endTime" | "breakMinutes" | "note">>
+      data: Partial<Pick<TimeEntry, "workDate" | "startTime" | "endTime" | "breakMinutes" | "note">> & {
+        tagIds?: number[];
+      }
     ) => request<{ entry: TimeEntry }>(`/entries/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     remove: (id: number) => request<{ ok: true }>(`/entries/${id}`, { method: "DELETE" }),
-    exportCsvUrl: (params: { from?: string; to?: string; q?: string; sort?: SortOption } = {}) => {
+    exportCsvUrl: (params: { from?: string; to?: string; q?: string; sort?: SortOption; tagId?: number } = {}) => {
       const search = toSearchParams(params);
       return `/api/entries/export.csv${search ? `?${search}` : ""}`;
     },
+  },
+  dayLabels: {
+    list: (params: { from?: string; to?: string } = {}) => {
+      const search = toSearchParams(params);
+      return request<{ dayLabels: DayLabel[] }>(`/day-labels${search ? `?${search}` : ""}`);
+    },
+    set: (workDate: string, status: DayStatus, note?: string) =>
+      request<{ dayLabel: DayLabel }>(`/day-labels/${workDate}`, {
+        method: "PUT",
+        body: JSON.stringify({ status, note }),
+      }),
+    remove: (workDate: string) => request<{ ok: true }>(`/day-labels/${workDate}`, { method: "DELETE" }),
+  },
+  tags: {
+    list: () => request<{ tags: Tag[] }>("/tags"),
+    create: (data: { name: string; color?: string; icon?: string }) =>
+      request<{ tag: Tag }>("/tags", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: number, data: { name?: string; color?: string; icon?: string }) =>
+      request<{ tag: Tag }>(`/tags/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    remove: (id: number) => request<{ ok: true }>(`/tags/${id}`, { method: "DELETE" }),
   },
   users: {
     list: () => request<{ users: User[] }>("/users"),
@@ -74,6 +96,7 @@ export const api = {
       role?: string;
       dailyTargetMinutes?: number | null;
       defaultBreakMinutes?: number;
+      breakRules?: BreakRule[] | null;
     }) => request<{ user: User }>("/users", { method: "POST", body: JSON.stringify(data) }),
     update: (id: number, data: Record<string, unknown>) =>
       request<{ user: User }>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
@@ -84,6 +107,9 @@ export const api = {
       displayName?: string;
       dailyTargetMinutes?: number | null;
       defaultBreakMinutes?: number;
+      breakRules?: BreakRule[] | null;
+      workDays?: number[];
+      dateFormat?: DateFormat;
       password?: string;
     }) => request<{ user: User }>("/profile", { method: "PATCH", body: JSON.stringify(data) }),
   },

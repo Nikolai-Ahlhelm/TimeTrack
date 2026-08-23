@@ -35,7 +35,11 @@ function addColumnIfMissing(table: string, column: string, definition: string) {
 function applyIncrementalMigrations() {
   addColumnIfMissing("users", "daily_target_minutes", "INTEGER");
   addColumnIfMissing("users", "default_break_minutes", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing("users", "work_days", "TEXT NOT NULL DEFAULT '1,2,3,4,5'");
+  addColumnIfMissing("users", "date_format", "TEXT NOT NULL DEFAULT 'YYYY-MM-DD'");
+  addColumnIfMissing("users", "break_rules", "TEXT");
   addColumnIfMissing("time_entries", "break_minutes", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing("tags", "icon", "TEXT");
 }
 
 export function runMigrations() {
@@ -48,5 +52,12 @@ export function runMigrations() {
   const setupRow = db.prepare("SELECT value FROM settings WHERE key = 'setup_complete'").get();
   if (!setupRow) {
     db.prepare("INSERT INTO settings (key, value) VALUES ('setup_complete', 'false')").run();
+  }
+
+  // Whether a Sick day counts toward worked time (e.g. for overtime calc).
+  // Defaults to true. Vacation always counts and has no toggle.
+  const sickSettingRow = db.prepare("SELECT value FROM settings WHERE key = 'sick_counts_as_work'").get();
+  if (!sickSettingRow) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('sick_counts_as_work', 'true')").run();
   }
 }

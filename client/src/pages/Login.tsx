@@ -32,8 +32,8 @@ export default function Login() {
         <ThemeToggle />
       </div>
       <div className="panel w-full max-w-sm p-8">
-        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">TimeTrack</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Sign in to track your work hours.</p>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-neutral-100">TimeTrack</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-neutral-400">Sign in to track your work hours.</p>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div>
             <label className="field-label-lg">Username</label>

@@ -18,11 +18,12 @@ function formatDuration(totalMinutes: number | null): string {
 
 export function entriesToCsv(entries: PublicTimeEntry[], includeUser: boolean, usernameById: Map<number, string>): string {
   const header = includeUser
-    ? ["User", "Date", "Start", "End", "Break (min)", "Total (h:mm)", "Note"]
-    : ["Date", "Start", "End", "Break (min)", "Total (h:mm)", "Note"];
+    ? ["User", "Date", "Start", "End", "Break (min)", "Total (h:mm)", "Note", "Tags"]
+    : ["Date", "Start", "End", "Break (min)", "Total (h:mm)", "Note", "Tags"];
   const lines = [header.map(csvField).join(",")];
 
   for (const e of entries) {
+    const tagNames = e.tags.map((t) => t.name).join("; ");
     const row = includeUser
       ? [
           usernameById.get(e.userId) ?? String(e.userId),
@@ -32,8 +33,17 @@ export function entriesToCsv(entries: PublicTimeEntry[], includeUser: boolean, u
           e.breakMinutes,
           formatDuration(e.totalMinutes),
           e.note ?? "",
+          tagNames,
         ]
-      : [e.workDate, e.startTime, e.endTime ?? "", e.breakMinutes, formatDuration(e.totalMinutes), e.note ?? ""];
+      : [
+          e.workDate,
+          e.startTime,
+          e.endTime ?? "",
+          e.breakMinutes,
+          formatDuration(e.totalMinutes),
+          e.note ?? "",
+          tagNames,
+        ];
     lines.push(row.map(csvField).join(","));
   }
 

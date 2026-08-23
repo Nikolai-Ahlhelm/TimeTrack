@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { db } from "../db/db.js";
 import { requireAdmin, requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { toPublicUser, type UserRow } from "../types.js";
+import { serializeBreakRules, validateBreakRules } from "../lib/breakRules.js";
 
 export const usersRouter = Router();
 usersRouter.use(requireAuth, requireAdmin);
@@ -13,7 +14,7 @@ usersRouter.get("/", (_req, res) => {
 });
 
 usersRouter.post("/", (req, res) => {
-  const { username, password, displayName, role, dailyTargetMinutes, defaultBreakMinutes } = req.body ?? {};
+  const { username, password, displayName, role, dailyTargetMinutes, defaultBreakMinutes, breakRules } = req.body ?? {};
   if (!username || !password) {
     return res.status(400).json({ error: "username and password are required" });
   }
@@ -26,10 +27,17 @@ usersRouter.post("/", (req, res) => {
     return res.status(409).json({ error: "Username already taken" });
   }
 
+  let breakRulesJson: string | null;
+  try {
+    breakRulesJson = serializeBreakRules(validateBreakRules(breakRules ?? null));
+  } catch (err) {
+    return res.status(400).json({ error: err instanceof Error ? err.message : "Invalid break rules" });
+  }
+
   const passwordHash = bcrypt.hashSync(password, 10);
   const info = db
     .prepare(
-      "INSERT INTO users (username, password_hash, display_name, role, daily_target_minutes, default_break_minutes, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)"
+      "INSERT INTO users (username, password_hash, display_name, role, daily_target_minutes, default_break_minutes, break_rules, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)"
     )
     .run(
       username,
@@ -37,7 +45,8 @@ usersRouter.post("/", (req, res) => {
       displayName || username,
       role || "user",
       dailyTargetMinutes ?? null,
-      defaultBreakMinutes ?? 0
+      defaultBreakMinutes ?? 0,
+      breakRulesJson
     );
 
   const row = db.prepare("SELECT * FROM users WHERE id = ?").get(info.lastInsertRowid) as UserRow;
@@ -49,13 +58,22 @@ usersRouter.patch("/:id", (req: AuthedRequest, res) => {
   const row = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow | undefined;
   if (!row) return res.status(404).json({ error: "User not found" });
 
-  const { displayName, role, dailyTargetMinutes, defaultBreakMinutes, isActive, password } = req.body ?? {};
+  const { displayName, role, dailyTargetMinutes, defaultBreakMinutes, breakRules, isActive, password } = req.body ?? {};
 
   if (row.id === req.user!.id && role && role !== "admin") {
     return res.status(400).json({ error: "You cannot remove your own admin role" });
   }
   if (row.id === req.user!.id && isActive === false) {
     return res.status(400).json({ error: "You cannot deactivate your own account" });
+  }
+
+  let nextBreakRulesJson = row.break_rules;
+  if (breakRules !== undefined) {
+    try {
+      nextBreakRulesJson = serializeBreakRules(validateBreakRules(breakRules));
+    } catch (err) {
+      return res.status(400).json({ error: err instanceof Error ? err.message : "Invalid break rules" });
+    }
   }
 
   const nextDisplayName = displayName ?? row.display_name;
@@ -66,8 +84,8 @@ usersRouter.patch("/:id", (req: AuthedRequest, res) => {
   const nextPasswordHash = password ? bcrypt.hashSync(password, 10) : row.password_hash;
 
   db.prepare(
-    "UPDATE users SET display_name = ?, role = ?, daily_target_minutes = ?, default_break_minutes = ?, is_active = ?, password_hash = ? WHERE id = ?"
-  ).run(nextDisplayName, nextRole, nextDailyTarget, nextDefaultBreak, nextIsActive, nextPasswordHash, id);
+    "UPDATE users SET display_name = ?, role = ?, daily_target_minutes = ?, default_break_minutes = ?, break_rules = ?, is_active = ?, password_hash = ? WHERE id = ?"
+  ).run(nextDisplayName, nextRole, nextDailyTarget, nextDefaultBreak, nextBreakRulesJson, nextIsActive, nextPasswordHash, id);
 
   const updated = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow;
   res.json({ user: toPublicUser(updated) });

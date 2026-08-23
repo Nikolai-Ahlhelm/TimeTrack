@@ -2,12 +2,14 @@ import { useState } from "react";
 
 interface Props {
   value: string;
+  /** Text shown while not editing, if it should differ from the raw value (e.g. a reformatted date). */
+  displayValue?: string;
   type?: "text" | "date" | "time" | "number";
   onSave: (value: string) => Promise<void> | void;
   placeholder?: string;
 }
 
-export default function EditableCell({ value, type = "text", onSave, placeholder }: Props) {
+export default function EditableCell({ value, displayValue, type = "text", onSave, placeholder }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
@@ -42,7 +44,7 @@ export default function EditableCell({ value, type = "text", onSave, placeholder
             setEditing(false);
           }
         }}
-        className="w-full rounded border border-brand-400 bg-white px-1.5 py-1 text-sm text-slate-900 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-brand-500 dark:bg-slate-950 dark:text-slate-100"
+        className="w-full rounded border border-brand-400 bg-white px-1.5 py-1 text-sm text-slate-900 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-brand-500 dark:bg-neutral-950 dark:text-neutral-100"
       />
     );
   }
@@ -54,9 +56,9 @@ export default function EditableCell({ value, type = "text", onSave, placeholder
         setDraft(value);
         setEditing(true);
       }}
-      className="w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+      className="w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
     >
-      {value || <span className="text-slate-400 dark:text-slate-500">{placeholder ?? "—"}</span>}
+      {value ? (displayValue ?? value) : <span className="text-slate-400 dark:text-neutral-500">{placeholder ?? "—"}</span>}
     </button>
   );
 }

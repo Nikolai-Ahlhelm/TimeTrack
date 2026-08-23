@@ -1,5 +1,13 @@
 export type Role = "admin" | "user";
 
+export const DATE_FORMATS = ["YYYY-MM-DD", "DD.MM.YYYY", "DD/MM/YYYY", "MM/DD/YYYY"] as const;
+export type DateFormat = (typeof DATE_FORMATS)[number];
+
+export interface BreakRule {
+  afterMinutes: number;
+  breakMinutes: number;
+}
+
 export interface User {
   id: number;
   username: string;
@@ -7,7 +15,18 @@ export interface User {
   role: Role;
   dailyTargetMinutes: number | null;
   defaultBreakMinutes: number;
+  breakRules: BreakRule[] | null;
+  workDays: number[];
+  dateFormat: DateFormat;
   isActive: boolean;
+  createdAt: string;
+}
+
+export interface Tag {
+  id: number;
+  name: string;
+  color: string;
+  icon: string | null;
   createdAt: string;
 }
 
@@ -20,8 +39,20 @@ export interface TimeEntry {
   breakMinutes: number;
   note: string | null;
   totalMinutes: number | null;
+  tags: Tag[];
   createdAt: string;
   updatedAt: string;
 }
 
 export type SortOption = "date_desc" | "date_asc" | "hours_desc" | "hours_asc";
+
+export type DayStatus = "sick" | "vacation";
+
+export interface DayLabel {
+  id: number;
+  workDate: string;
+  status: DayStatus;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -7,6 +7,7 @@ export default function ExportButton({ filters }: { filters: Filters }) {
     to: filters.to || undefined,
     q: filters.q || undefined,
     sort: filters.sort,
+    tagId: filters.tagId,
   });
 
   return (
