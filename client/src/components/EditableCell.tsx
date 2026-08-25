@@ -44,7 +44,7 @@ export default function EditableCell({ value, displayValue, type = "text", onSav
             setEditing(false);
           }
         }}
-        className="w-full rounded border border-brand-400 bg-white px-1.5 py-1 text-sm text-slate-900 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-brand-500 dark:bg-neutral-950 dark:text-neutral-100"
+        className="w-full min-w-0 rounded border border-brand-400 bg-white px-1.5 py-1 text-sm text-slate-900 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-brand-500 dark:bg-neutral-950 dark:text-neutral-100"
       />
     );
   }
@@ -56,7 +56,7 @@ export default function EditableCell({ value, displayValue, type = "text", onSav
         setDraft(value);
         setEditing(true);
       }}
-      className="w-full rounded px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+      className="w-full rounded border border-transparent px-1.5 py-1 text-left text-sm text-slate-700 hover:bg-slate-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
     >
       {value ? (displayValue ?? value) : <span className="text-slate-400 dark:text-neutral-500">{placeholder ?? "—"}</span>}
     </button>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { DateFormat, DayLabel, DayStatus, SortOption, Tag, TimeEntry } from "../api/types";
 import { ApiError } from "../api/client";
 import EditableCell from "./EditableCell";
@@ -23,6 +23,7 @@ interface Props {
   onCreateTag: (name: string) => Promise<Tag>;
   onSetLabel: (workDate: string, status: DayStatus) => Promise<void>;
   onRemoveLabel: (workDate: string) => void;
+  actions?: ReactNode;
 }
 
 interface DayGroup {
@@ -68,7 +69,13 @@ function mergeDayLabels(entryGroups: DayGroup[], dayLabels: DayLabel[], sort: So
   return [...entryGroups, ...labelGroups];
 }
 
-function AddDayLabelForm({ onSetLabel }: { onSetLabel: (workDate: string, status: DayStatus) => Promise<void> }) {
+function AddDayLabelForm({
+  onSetLabel,
+  actions,
+}: {
+  onSetLabel: (workDate: string, status: DayStatus) => Promise<void>;
+  actions?: ReactNode;
+}) {
   const [date, setDate] = useState(() => toLocalDateStr(new Date()));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,16 +93,19 @@ function AddDayLabelForm({ onSetLabel }: { onSetLabel: (workDate: string, status
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-800/30">
-      <span className="text-xs font-medium text-slate-500 dark:text-neutral-400">Mark a day:</span>
-      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="field-sm" />
-      <button type="button" disabled={busy} onClick={() => handleMark("sick")} className="btn-secondary px-2 py-1 text-xs">
-        Mark Sick
-      </button>
-      <button type="button" disabled={busy} onClick={() => handleMark("vacation")} className="btn-secondary px-2 py-1 text-xs">
-        Mark Vacation
-      </button>
-      {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-800/30">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-slate-500 dark:text-neutral-400">Mark a day:</span>
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="field-sm" />
+        <button type="button" disabled={busy} onClick={() => handleMark("sick")} className="btn-secondary px-2 py-1 text-xs">
+          Mark Sick
+        </button>
+        <button type="button" disabled={busy} onClick={() => handleMark("vacation")} className="btn-secondary px-2 py-1 text-xs">
+          Mark Vacation
+        </button>
+        {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
+      </div>
+      {actions}
     </div>
   );
 }
@@ -114,6 +124,7 @@ export default function TimeTable({
   onCreateTag,
   onSetLabel,
   onRemoveLabel,
+  actions,
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -282,13 +293,23 @@ export default function TimeTable({
 
   return (
     <div className="panel overflow-x-auto">
-      <AddDayLabelForm onSetLabel={onSetLabel} />
+      <AddDayLabelForm onSetLabel={onSetLabel} actions={actions} />
       {groups.length === 0 ? (
         <div className="p-8 text-center text-sm text-slate-500 dark:text-neutral-400">
           No entries match the current filters.
         </div>
       ) : (
-        <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-neutral-800">
+        <table className="min-w-full table-fixed divide-y divide-slate-200 text-sm dark:divide-neutral-800">
+          <colgroup>
+            <col className="w-32" />
+            <col className="w-24" />
+            <col className="w-24" />
+            <col className="w-24" />
+            <col className="w-20" />
+            <col />
+            <col className="w-40" />
+            <col className="w-16" />
+          </colgroup>
           <thead className="bg-slate-50 dark:bg-neutral-800/50">
             <tr>
               <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Date</th>

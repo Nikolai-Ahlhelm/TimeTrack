@@ -3,7 +3,15 @@ import { db } from "../db/db.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { entriesToCsv } from "../lib/csv.js";
 import { parseBreakRules, requiredBreakMinutes } from "../lib/breakRules.js";
-import { toPublicEntry, toPublicTag, type PublicTag, type TagRow, type TimeEntryRow } from "../types.js";
+import {
+  toPublicDayLabel,
+  toPublicEntry,
+  toPublicTag,
+  type DayLabelRow,
+  type PublicTag,
+  type TagRow,
+  type TimeEntryRow,
+} from "../types.js";
 
 export const entriesRouter = Router();
 entriesRouter.use(requireAuth);
@@ -109,7 +117,27 @@ entriesRouter.get("/", (req: AuthedRequest, res) => {
 entriesRouter.get("/export.csv", (req: AuthedRequest, res) => {
   const { sql, params } = buildQuery(req.user!.id, req.query as Record<string, unknown>);
   const rows = db.prepare(sql).all(...params) as TimeEntryRow[];
-  const csv = entriesToCsv(toPublicEntries(rows), false, new Map());
+
+  // Whole-day labels (vacation/sick) live in a separate table from time
+  // entries, so they need their own query — otherwise they're silently
+  // absent from the export even though they cover real days off.
+  const { from, to, sort } = req.query as Record<string, unknown>;
+  const labelClauses = ["user_id = ?"];
+  const labelParams: unknown[] = [req.user!.id];
+  if (typeof from === "string" && from) {
+    labelClauses.push("work_date >= ?");
+    labelParams.push(from);
+  }
+  if (typeof to === "string" && to) {
+    labelClauses.push("work_date <= ?");
+    labelParams.push(to);
+  }
+  const labelRows = db
+    .prepare(`SELECT * FROM day_labels WHERE ${labelClauses.join(" AND ")}`)
+    .all(...labelParams) as DayLabelRow[];
+
+  const sortDescending = sort !== "date_asc";
+  const csv = entriesToCsv(toPublicEntries(rows), labelRows.map(toPublicDayLabel), false, new Map(), sortDescending);
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="timetrack-export-${Date.now()}.csv"`);
   res.send(csv);

@@ -48,7 +48,6 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(today.getMonth()); // 0-11
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [dayLabels, setDayLabels] = useState<DayLabel[]>([]);
-  const [sickCountsAsWork, setSickCountsAsWork] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +55,7 @@ export default function CalendarPage() {
 
   const dateFormat = user?.dateFormat ?? "YYYY-MM-DD";
   const dailyTargetMinutes = user?.dailyTargetMinutes ?? null;
+  const sickCountsAsWork = user?.sickCountsAsWork ?? true;
 
   const from = toDateStr(year, month, 1);
   const to = toDateStr(year, month, daysInMonth(year, month));
@@ -63,16 +63,11 @@ export default function CalendarPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([
-      api.entries.list({ from, to }),
-      api.dayLabels.list({ from, to }),
-      api.settings.get(),
-    ])
-      .then(([entriesRes, labelsRes, settingsRes]) => {
+    Promise.all([api.entries.list({ from, to }), api.dayLabels.list({ from, to })])
+      .then(([entriesRes, labelsRes]) => {
         if (cancelled) return;
         setEntries(entriesRes.entries);
         setDayLabels(labelsRes.dayLabels);
-        setSickCountsAsWork(settingsRes.settings.sick_counts_as_work !== "false");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

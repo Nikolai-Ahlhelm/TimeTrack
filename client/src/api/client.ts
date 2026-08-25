@@ -97,6 +97,7 @@ export const api = {
       dailyTargetMinutes?: number | null;
       defaultBreakMinutes?: number;
       breakRules?: BreakRule[] | null;
+      sickCountsAsWork?: boolean;
     }) => request<{ user: User }>("/users", { method: "POST", body: JSON.stringify(data) }),
     update: (id: number, data: Record<string, unknown>) =>
       request<{ user: User }>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
@@ -110,6 +111,7 @@ export const api = {
       breakRules?: BreakRule[] | null;
       workDays?: number[];
       dateFormat?: DateFormat;
+      sickCountsAsWork?: boolean;
       password?: string;
     }) => request<{ user: User }>("/profile", { method: "PATCH", body: JSON.stringify(data) }),
   },

@@ -21,6 +21,7 @@ export default function Settings() {
     (user?.breakRules ?? []).map((r) => ({ afterHours: String(r.afterMinutes / 60), breakMinutes: String(r.breakMinutes) }))
   );
   const [workDays, setWorkDays] = useState<number[]>(user?.workDays ?? [1, 2, 3, 4, 5]);
+  const [sickCountsAsWork, setSickCountsAsWork] = useState(user?.sickCountsAsWork ?? true);
   const [newPassword, setNewPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +89,7 @@ export default function Settings() {
         breakRules: breakRulesToPayload(),
         workDays,
         dateFormat,
+        sickCountsAsWork,
         ...(newPassword ? { password: newPassword } : {}),
       });
       setUser(updated);
@@ -241,6 +243,29 @@ export default function Settings() {
             <p className="mt-1 text-xs text-slate-500 dark:text-neutral-400">
               The days you're scheduled to work. Used to calculate weekly overtime.
             </p>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="field-label-lg">Sick days count as work time</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-neutral-400">
+                When enabled, a day marked Sick is credited with your daily target toward worked time and overtime.
+                Vacation days always count.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSickCountsAsWork((v) => !v)}
+              aria-pressed={sickCountsAsWork}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+                sickCountsAsWork ? "bg-brand-600" : "bg-slate-300 dark:bg-neutral-700"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition ${
+                  sickCountsAsWork ? "left-5" : "left-0.5"
+                }`}
+              />
+            </button>
           </div>
           <div>
             <label className="field-label-lg">Date format</label>

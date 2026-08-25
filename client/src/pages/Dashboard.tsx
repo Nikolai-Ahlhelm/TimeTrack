@@ -28,7 +28,6 @@ export default function Dashboard() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [weekLabels, setWeekLabels] = useState<DayLabel[]>([]);
   const [filteredDayLabels, setFilteredDayLabels] = useState<DayLabel[]>([]);
-  const [sickCountsAsWork, setSickCountsAsWork] = useState(true);
   const [labelBusy, setLabelBusy] = useState(false);
 
   async function loadFiltered() {
@@ -86,17 +85,11 @@ export default function Dashboard() {
     setWeekLabels(dayLabels);
   }
 
-  async function loadSettings() {
-    const { settings } = await api.settings.get();
-    setSickCountsAsWork(settings.sick_counts_as_work !== "false");
-  }
-
   useEffect(() => {
     loadOpen();
     loadStats();
     loadTags();
     loadWeekLabels();
-    loadSettings();
   }, []);
 
   useEffect(() => {
@@ -108,6 +101,7 @@ export default function Dashboard() {
   const todayStr = toLocalDateStr(new Date());
   const weekStart = startOfWeek(new Date());
   const dailyTarget = user?.dailyTargetMinutes ?? null;
+  const sickCountsAsWork = user?.sickCountsAsWork ?? true;
 
   const hasEntriesToday = useMemo(() => allEntries.some((e) => e.workDate === todayStr), [allEntries, todayStr]);
   const todayLabel = useMemo(() => weekLabels.find((l) => l.workDate === todayStr) ?? null, [weekLabels, todayStr]);
@@ -260,35 +254,40 @@ export default function Dashboard() {
               onRemoveTodayLabel={handleRemoveTodayLabel}
             />
           </div>
-          <div className="panel p-5">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-neutral-500">Today</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-neutral-100">
-              {formatDuration(todayMinutes)}
-            </div>
-            {todayOvertime !== null && (
-              <div
-                className={`mt-0.5 text-xs font-medium ${
-                  todayOvertime < 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
-                }`}
-              >
-                {formatSignedDuration(todayOvertime)} vs. target
+          {/* Today/This-week sit side by side even on mobile; sm:contents
+              drops this wrapper from the grid so they fall back to being
+              direct children of the 3-col grid above the sm breakpoint. */}
+          <div className="grid grid-cols-2 gap-4 sm:contents">
+            <div className="panel p-5">
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-neutral-500">Today</div>
+              <div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-neutral-100">
+                {formatDuration(todayMinutes)}
               </div>
-            )}
-          </div>
-          <div className="panel p-5">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-neutral-500">This week</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-neutral-100">
-              {formatDuration(weekMinutes)}
+              {todayOvertime !== null && (
+                <div
+                  className={`mt-0.5 text-xs font-medium ${
+                    todayOvertime < 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+                  }`}
+                >
+                  {formatSignedDuration(todayOvertime)} vs. target
+                </div>
+              )}
             </div>
-            {weekOvertime !== null && (
-              <div
-                className={`mt-0.5 text-xs font-medium ${
-                  weekOvertime < 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
-                }`}
-              >
-                {formatSignedDuration(weekOvertime)} vs. target
+            <div className="panel p-5">
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-neutral-500">This week</div>
+              <div className="mt-1 text-2xl font-semibold text-slate-900 dark:text-neutral-100">
+                {formatDuration(weekMinutes)}
               </div>
-            )}
+              {weekOvertime !== null && (
+                <div
+                  className={`mt-0.5 text-xs font-medium ${
+                    weekOvertime < 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+                  }`}
+                >
+                  {formatSignedDuration(weekOvertime)} vs. target
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -302,10 +301,7 @@ export default function Dashboard() {
           </p>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <FilterBar filters={filters} onChange={setFilters} tags={tags} />
-          <ExportButton filters={filters} />
-        </div>
+        <FilterBar filters={filters} onChange={setFilters} tags={tags} />
 
         <TimeTable
           entries={entries}
@@ -318,6 +314,7 @@ export default function Dashboard() {
           onCreateTag={handleCreateTag}
           onSetLabel={handleSetDayLabel}
           onRemoveLabel={handleRemoveDayLabel}
+          actions={<ExportButton filters={filters} />}
         />
       </main>
     </div>

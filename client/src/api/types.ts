@@ -18,6 +18,7 @@ export interface User {
   breakRules: BreakRule[] | null;
   workDays: number[];
   dateFormat: DateFormat;
+  sickCountsAsWork: boolean;
   isActive: boolean;
   createdAt: string;
 }

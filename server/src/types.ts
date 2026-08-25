@@ -18,6 +18,7 @@ export interface UserRow {
   break_rules: string | null;
   work_days: string;
   date_format: string;
+  sick_counts_as_work: number;
   is_active: number;
   created_at: string;
 }
@@ -32,6 +33,7 @@ export interface PublicUser {
   breakRules: BreakRule[] | null;
   workDays: number[];
   dateFormat: DateFormat;
+  sickCountsAsWork: boolean;
   isActive: boolean;
   createdAt: string;
 }
@@ -138,6 +140,7 @@ export function toPublicUser(row: UserRow): PublicUser {
     dateFormat: (DATE_FORMATS as readonly string[]).includes(row.date_format)
       ? (row.date_format as DateFormat)
       : "YYYY-MM-DD",
+    sickCountsAsWork: row.sick_counts_as_work === 1,
     isActive: row.is_active === 1,
     createdAt: row.created_at,
   };

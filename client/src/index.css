@@ -19,12 +19,12 @@
   }
 }
 
-/* Below the `sm` breakpoint, Nav renders as a fixed bottom tab bar instead of
-   a top header — this keeps page content (and the safe-area inset on iOS)
-   clear of it. Harmless on the couple of pages that don't render Nav. */
+/* Below the `sm` breakpoint, Nav renders as a floating rounded dock instead
+   of a top header — this keeps page content (and the safe-area inset on
+   iOS) clear of it. Harmless on the couple of pages that don't render Nav. */
 @media (max-width: 639px) {
   body {
-    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
   }
 }
 

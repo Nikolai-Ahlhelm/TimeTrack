@@ -58,7 +58,16 @@ usersRouter.patch("/:id", (req: AuthedRequest, res) => {
   const row = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow | undefined;
   if (!row) return res.status(404).json({ error: "User not found" });
 
-  const { displayName, role, dailyTargetMinutes, defaultBreakMinutes, breakRules, isActive, password } = req.body ?? {};
+  const {
+    displayName,
+    role,
+    dailyTargetMinutes,
+    defaultBreakMinutes,
+    breakRules,
+    sickCountsAsWork,
+    isActive,
+    password,
+  } = req.body ?? {};
 
   if (row.id === req.user!.id && role && role !== "admin") {
     return res.status(400).json({ error: "You cannot remove your own admin role" });
@@ -80,12 +89,23 @@ usersRouter.patch("/:id", (req: AuthedRequest, res) => {
   const nextRole = role ?? row.role;
   const nextDailyTarget = dailyTargetMinutes === undefined ? row.daily_target_minutes : dailyTargetMinutes;
   const nextDefaultBreak = defaultBreakMinutes === undefined ? row.default_break_minutes : defaultBreakMinutes;
+  const nextSickCountsAsWork = sickCountsAsWork === undefined ? row.sick_counts_as_work : sickCountsAsWork ? 1 : 0;
   const nextIsActive = isActive === undefined ? row.is_active : isActive ? 1 : 0;
   const nextPasswordHash = password ? bcrypt.hashSync(password, 10) : row.password_hash;
 
   db.prepare(
-    "UPDATE users SET display_name = ?, role = ?, daily_target_minutes = ?, default_break_minutes = ?, break_rules = ?, is_active = ?, password_hash = ? WHERE id = ?"
-  ).run(nextDisplayName, nextRole, nextDailyTarget, nextDefaultBreak, nextBreakRulesJson, nextIsActive, nextPasswordHash, id);
+    "UPDATE users SET display_name = ?, role = ?, daily_target_minutes = ?, default_break_minutes = ?, break_rules = ?, sick_counts_as_work = ?, is_active = ?, password_hash = ? WHERE id = ?"
+  ).run(
+    nextDisplayName,
+    nextRole,
+    nextDailyTarget,
+    nextDefaultBreak,
+    nextBreakRulesJson,
+    nextSickCountsAsWork,
+    nextIsActive,
+    nextPasswordHash,
+    id
+  );
 
   const updated = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow;
   res.json({ user: toPublicUser(updated) });

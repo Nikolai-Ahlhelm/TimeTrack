@@ -105,6 +105,11 @@ export default function UserManager() {
     await load();
   }
 
+  async function toggleSickCountsAsWork(u: User) {
+    await api.users.update(u.id, { sickCountsAsWork: !u.sickCountsAsWork });
+    await load();
+  }
+
   async function editBreakRules(u: User) {
     const next = prompt(
       `Break time rules for ${u.username} — comma-separated "hours worked:break minutes" pairs (e.g. "6:30, 9:45"). Leave blank to disable and use the flat default break only.`,
@@ -180,6 +185,7 @@ export default function UserManager() {
               <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Daily target</th>
               <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Break</th>
               <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Break rules</th>
+              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Sick = work</th>
               <th className="px-3 py-2.5" />
             </tr>
           </thead>
@@ -232,6 +238,20 @@ export default function UserManager() {
                     className="text-slate-600 hover:text-brand-600 dark:text-neutral-300 dark:hover:text-brand-400"
                   >
                     {describeBreakRules(u.breakRules)}
+                  </button>
+                </td>
+                <td className="px-3 py-2">
+                  <button
+                    onClick={() => toggleSickCountsAsWork(u)}
+                    aria-pressed={u.sickCountsAsWork}
+                    title="Whether a Sick day is credited with this user's daily target toward worked time and overtime"
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      u.sickCountsAsWork
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
+                        : "bg-slate-100 text-slate-500 dark:bg-neutral-800 dark:text-neutral-400"
+                    }`}
+                  >
+                    {u.sickCountsAsWork ? "Yes" : "No"}
                   </button>
                 </td>
                 <td className="space-x-3 px-3 py-2 text-right">

@@ -8,15 +8,24 @@ import { serializeBreakRules, validateBreakRules } from "../lib/breakRules.js";
 // Self-service settings: a user can update their own display name, daily
 // work-time target (for overtime calculation), default break/lunch time,
 // tiered break rules, scheduled work days, preferred date display format,
-// and password — but not their username, role, or active status.
+// whether Sick days count toward their worked time, and password — but not
+// their username, role, or active status.
 export const profileRouter = Router();
 profileRouter.use(requireAuth);
 
 profileRouter.patch("/", (req: AuthedRequest, res) => {
   const row = db.prepare("SELECT * FROM users WHERE id = ?").get(req.user!.id) as UserRow;
 
-  const { displayName, dailyTargetMinutes, defaultBreakMinutes, breakRules, workDays, dateFormat, password } =
-    req.body ?? {};
+  const {
+    displayName,
+    dailyTargetMinutes,
+    defaultBreakMinutes,
+    breakRules,
+    workDays,
+    dateFormat,
+    sickCountsAsWork,
+    password,
+  } = req.body ?? {};
 
   if (dailyTargetMinutes !== undefined && dailyTargetMinutes !== null) {
     if (!Number.isFinite(Number(dailyTargetMinutes)) || Number(dailyTargetMinutes) < 0) {
@@ -57,10 +66,11 @@ profileRouter.patch("/", (req: AuthedRequest, res) => {
   const nextDailyTarget = dailyTargetMinutes === undefined ? row.daily_target_minutes : dailyTargetMinutes;
   const nextDefaultBreak = defaultBreakMinutes === undefined ? row.default_break_minutes : Number(defaultBreakMinutes);
   const nextDateFormat = dateFormat === undefined ? row.date_format : dateFormat;
+  const nextSickCountsAsWork = sickCountsAsWork === undefined ? row.sick_counts_as_work : sickCountsAsWork ? 1 : 0;
   const nextPasswordHash = password ? bcrypt.hashSync(password, 10) : row.password_hash;
 
   db.prepare(
-    "UPDATE users SET display_name = ?, daily_target_minutes = ?, default_break_minutes = ?, break_rules = ?, work_days = ?, date_format = ?, password_hash = ? WHERE id = ?"
+    "UPDATE users SET display_name = ?, daily_target_minutes = ?, default_break_minutes = ?, break_rules = ?, work_days = ?, date_format = ?, sick_counts_as_work = ?, password_hash = ? WHERE id = ?"
   ).run(
     nextDisplayName,
     nextDailyTarget,
@@ -68,6 +78,7 @@ profileRouter.patch("/", (req: AuthedRequest, res) => {
     nextBreakRulesJson,
     nextWorkDaysStr,
     nextDateFormat,
+    nextSickCountsAsWork,
     nextPasswordHash,
     req.user!.id
   );

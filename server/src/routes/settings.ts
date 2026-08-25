@@ -8,8 +8,7 @@ settingsRouter.use(requireAuth);
 // Keys that are internal/system-managed and should not be edited via this API.
 const PROTECTED_KEYS = new Set(["setup_complete"]);
 
-// Any authenticated user can read app-wide settings (e.g. the calendar needs
-// to know whether Sick days count as work time) — only admins can change them.
+// Any authenticated user can read app-wide settings — only admins can change them.
 settingsRouter.get("/", (_req, res) => {
   const rows = db.prepare("SELECT key, value FROM settings").all() as { key: string; value: string }[];
   const settings = Object.fromEntries(rows.filter((r) => !PROTECTED_KEYS.has(r.key)).map((r) => [r.key, r.value]));
