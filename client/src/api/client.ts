@@ -85,6 +85,11 @@ export const api = {
         method: "PUT",
         body: JSON.stringify({ status, note }),
       }),
+    setBulk: (data: { from: string; to: string; status: DayStatus; skipWeekends: boolean }) =>
+      request<{ applied: number; skippedWithEntries: number }>("/day-labels/bulk", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     remove: (workDate: string) => request<{ ok: true }>(`/day-labels/${workDate}`, { method: "DELETE" }),
   },
   tags: {

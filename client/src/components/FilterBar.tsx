@@ -47,9 +47,11 @@ interface Props {
   filters: Filters;
   onChange: (filters: Filters) => void;
   tags: Tag[];
+  showEmptyDays: boolean;
+  onShowEmptyDaysChange: (value: boolean) => void;
 }
 
-export default function FilterBar({ filters, onChange, tags }: Props) {
+export default function FilterBar({ filters, onChange, tags, showEmptyDays, onShowEmptyDaysChange }: Props) {
   const activeQuickDays = QUICK_RANGES.find((n) => {
     const { from, to } = lastNDays(n);
     return filters.from === from && filters.to === to;
@@ -180,6 +182,29 @@ export default function FilterBar({ filters, onChange, tags }: Props) {
               </button>
             ))}
           </div>
+        </div>
+        <div>
+          <label className="field-label">Empty days</label>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={showEmptyDays}
+            onClick={() => onShowEmptyDaysChange(!showEmptyDays)}
+            className="mt-1 flex items-center gap-2 text-xs text-slate-600 dark:text-neutral-300"
+          >
+            <span
+              className={`relative inline-block h-5 w-9 rounded-full transition-colors ${
+                showEmptyDays ? "bg-brand-600" : "bg-slate-300 dark:bg-neutral-700"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
+                  showEmptyDays ? "left-[1.125rem]" : "left-0.5"
+                }`}
+              />
+            </span>
+            Show days without entries
+          </button>
         </div>
         {hasActiveFilters && (
           <button

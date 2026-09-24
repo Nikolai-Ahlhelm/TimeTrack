@@ -26,9 +26,26 @@ export default function Dashboard() {
   const [filters, setFilters] = useState<Filters>({ from: "", to: "", q: "", sort: "date_desc" });
   const [allEntries, setAllEntries] = useState<TimeEntry[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [allLabels, setAllLabels] = useState<DayLabel[]>([]);
   const [weekLabels, setWeekLabels] = useState<DayLabel[]>([]);
   const [filteredDayLabels, setFilteredDayLabels] = useState<DayLabel[]>([]);
   const [labelBusy, setLabelBusy] = useState(false);
+  const [showEmptyDays, setShowEmptyDays] = useState(() => {
+    try {
+      return localStorage.getItem("showEmptyDays") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  function handleShowEmptyDaysChange(value: boolean) {
+    setShowEmptyDays(value);
+    try {
+      localStorage.setItem("showEmptyDays", String(value));
+    } catch {
+      // preference just won't persist
+    }
+  }
 
   async function loadFiltered() {
     // A day-status filter only ever matches labeled days, which never have
@@ -55,6 +72,11 @@ export default function Dashboard() {
   async function loadStats() {
     const { entries } = await api.entries.list({ sort: "date_desc" });
     setAllEntries(entries);
+  }
+
+  async function loadAllLabels() {
+    const { dayLabels } = await api.dayLabels.list({});
+    setAllLabels(dayLabels);
   }
 
   async function loadOpen() {
@@ -90,6 +112,7 @@ export default function Dashboard() {
     loadStats();
     loadTags();
     loadWeekLabels();
+    loadAllLabels();
   }, []);
 
   useEffect(() => {
@@ -103,7 +126,6 @@ export default function Dashboard() {
   const dailyTarget = user?.dailyTargetMinutes ?? null;
   const sickCountsAsWork = user?.sickCountsAsWork ?? true;
 
-  const hasEntriesToday = useMemo(() => allEntries.some((e) => e.workDate === todayStr), [allEntries, todayStr]);
   const todayLabel = useMemo(() => weekLabels.find((l) => l.workDate === todayStr) ?? null, [weekLabels, todayStr]);
 
   // A Sick/Vacation day with no time entries is credited with the daily
@@ -147,6 +169,48 @@ export default function Dashboard() {
     return count;
   }, [weekStart, workDays]);
   const weekOvertime = dailyTarget !== null ? weekMinutes - dailyTarget * scheduledDaysThisWeek : null;
+
+  // Running balance across every day from the first tracked day through today:
+  // each scheduled work day owes the daily target, days off owe nothing, and
+  // Sick/Vacation labels on scheduled days are credited like in the tiles above.
+  const totalOvertime = useMemo(() => {
+    if (dailyTarget === null) return null;
+    const workedByDate = new Map<string, number>();
+    for (const e of allEntries) workedByDate.set(e.workDate, (workedByDate.get(e.workDate) ?? 0) + (e.totalMinutes ?? 0));
+    const labelByDate = new Map(allLabels.map((l) => [l.workDate, l.status] as const));
+    const dates = [...workedByDate.keys(), ...labelByDate.keys()];
+    if (dates.length === 0) return 0;
+    const first = dates.reduce((min, d) => (d < min ? d : min));
+    const [y, m, day] = first.split("-").map(Number);
+    let balance = 0;
+    for (let d = new Date(y, m - 1, day); toLocalDateStr(d) <= todayStr; d.setDate(d.getDate() + 1)) {
+      const key = toLocalDateStr(d);
+      const scheduled = workDays.includes(((d.getDay() + 6) % 7) + 1);
+      const status = labelByDate.get(key);
+      const credit = scheduled && status ? creditedMinutesForLabel(status) : 0;
+      balance += (workedByDate.get(key) ?? 0) + credit - (scheduled ? dailyTarget : 0);
+    }
+    return balance;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allEntries, allLabels, dailyTarget, sickCountsAsWork, workDays, todayStr]);
+
+  // Placeholder rows only make sense for an unfiltered, date-sorted list: a
+  // search/tag/status filter means the user wants matches only. Without an
+  // explicit From, the range starts at the earliest tracked day; without an
+  // explicit To it runs to the end of the current week (Sunday).
+  const weekEndStr = useMemo(() => {
+    const end = new Date(weekStart);
+    end.setDate(end.getDate() + 6);
+    return toLocalDateStr(end);
+  }, [weekStart]);
+  const emptyDaysRange = useMemo(() => {
+    if (!showEmptyDays) return null;
+    if (filters.q || filters.tagId !== undefined || filters.dayStatus) return null;
+    const dates = [...allEntries.map((e) => e.workDate), ...filteredDayLabels.map((l) => l.workDate)];
+    const from = filters.from || dates.reduce((min, d) => (d < min ? d : min), todayStr);
+    const to = filters.to || weekEndStr;
+    return from <= to ? { from, to } : null;
+  }, [showEmptyDays, filters, allEntries, filteredDayLabels, todayStr, weekEndStr]);
 
   async function handleStart() {
     setBusy(true);
@@ -195,6 +259,7 @@ export default function Dashboard() {
   // date, so the ClockButton, the stat tiles, and the table all stay in sync
   // no matter where the change came from.
   function applyDayLabel(dayLabel: DayLabel) {
+    setAllLabels((prev) => [...prev.filter((l) => l.workDate !== dayLabel.workDate), dayLabel]);
     setWeekLabels((prev) => [...prev.filter((l) => l.workDate !== dayLabel.workDate), dayLabel]);
     setFilteredDayLabels((prev) => {
       const rest = prev.filter((l) => l.workDate !== dayLabel.workDate);
@@ -204,20 +269,9 @@ export default function Dashboard() {
   }
 
   function clearDayLabel(workDate: string) {
+    setAllLabels((prev) => prev.filter((l) => l.workDate !== workDate));
     setWeekLabels((prev) => prev.filter((l) => l.workDate !== workDate));
     setFilteredDayLabels((prev) => prev.filter((l) => l.workDate !== workDate));
-  }
-
-  async function handleSetTodayLabel(status: DayStatus) {
-    setLabelBusy(true);
-    try {
-      const { dayLabel } = await api.dayLabels.set(toLocalDateStr(new Date()), status);
-      applyDayLabel(dayLabel);
-    } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Something went wrong");
-    } finally {
-      setLabelBusy(false);
-    }
   }
 
   async function handleRemoveTodayLabel() {
@@ -245,7 +299,7 @@ export default function Dashboard() {
     <div className="min-h-screen">
       <Nav />
       <main className="mx-auto max-w-5xl space-y-6 px-4 py-6">
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-4">
           <div className="sm:col-span-1 h-full">
             <ClockButton
               openEntry={openEntry}
@@ -253,9 +307,7 @@ export default function Dashboard() {
               onStart={handleStart}
               onStop={handleStop}
               todayLabel={todayLabel}
-              hasEntriesToday={hasEntriesToday}
               labelBusy={labelBusy}
-              onSetTodayLabel={handleSetTodayLabel}
               onRemoveTodayLabel={handleRemoveTodayLabel}
             />
           </div>
@@ -293,6 +345,19 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+            {totalOvertime !== null && (
+              <div className="panel col-span-2 p-5 sm:col-span-1">
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-neutral-500">Total overtime</div>
+                <div
+                  className={`mt-1 text-2xl font-semibold ${
+                    totalOvertime < 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+                  }`}
+                >
+                  {formatSignedDuration(totalOvertime)}
+                </div>
+                <div className="mt-0.5 text-xs font-medium text-slate-400 dark:text-neutral-500">accumulated</div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -306,13 +371,26 @@ export default function Dashboard() {
           </p>
         )}
 
-        <FilterBar filters={filters} onChange={setFilters} tags={tags} />
+        <FilterBar
+          filters={filters}
+          onChange={setFilters}
+          tags={tags}
+          showEmptyDays={showEmptyDays}
+          onShowEmptyDaysChange={handleShowEmptyDaysChange}
+        />
 
         <TimeTable
           entries={entries}
           dayLabels={filteredDayLabels}
           sort={filters.sort}
           dateFormat={user?.dateFormat}
+          dailyTarget={dailyTarget}
+          emptyDaysRange={emptyDaysRange}
+          workDays={workDays}
+          sickCountsAsWork={sickCountsAsWork}
+          filterFrom={filters.from}
+          filterTo={filters.to}
+          contentFiltered={!!filters.q || filters.tagId !== undefined || !!filters.dayStatus}
           allTags={tags}
           onUpdate={handleUpdate}
           onDelete={handleDelete}

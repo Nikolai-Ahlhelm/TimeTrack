@@ -55,6 +55,49 @@ dayLabelsRouter.put("/:workDate", (req: AuthedRequest, res) => {
   res.json({ dayLabel: toPublicDayLabel(row) });
 });
 
+// Label a whole date range at once. Days that already have time entries are
+// skipped (not an error) so a range can be applied over a partly-worked span.
+dayLabelsRouter.post("/bulk", (req: AuthedRequest, res) => {
+  const { from, to, status, skipWeekends } = req.body ?? {};
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  if (typeof from !== "string" || typeof to !== "string" || !dateRe.test(from) || !dateRe.test(to)) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+  if (!DAY_STATUSES.includes(status)) {
+    return res.status(400).json({ error: `Status must be one of: ${DAY_STATUSES.join(", ")}` });
+  }
+  const start = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) {
+    return res.status(400).json({ error: "Invalid date range" });
+  }
+  if ((end.getTime() - start.getTime()) / 86400000 > 365) {
+    return res.status(400).json({ error: "Range too large (max 366 days)" });
+  }
+
+  const userId = req.user!.id;
+  const upsert = db.prepare(
+    `INSERT INTO day_labels (user_id, work_date, status) VALUES (?, ?, ?)
+     ON CONFLICT(user_id, work_date) DO UPDATE SET status = excluded.status, updated_at = datetime('now')`
+  );
+  let applied = 0;
+  let skippedWithEntries = 0;
+  db.transaction(() => {
+    for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      const dow = d.getUTCDay();
+      if (skipWeekends && (dow === 0 || dow === 6)) continue;
+      const workDate = d.toISOString().slice(0, 10);
+      if (hasEntriesOn(userId, workDate)) {
+        skippedWithEntries++;
+        continue;
+      }
+      upsert.run(userId, workDate, status);
+      applied++;
+    }
+  })();
+  res.json({ applied, skippedWithEntries });
+});
+
 dayLabelsRouter.delete("/:workDate", (req: AuthedRequest, res) => {
   const { workDate } = req.params;
   db.prepare("DELETE FROM day_labels WHERE user_id = ? AND work_date = ?").run(req.user!.id, workDate);

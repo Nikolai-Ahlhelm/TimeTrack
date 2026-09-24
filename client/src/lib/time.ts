@@ -30,6 +30,14 @@ export const DATE_FORMAT_LABELS: Record<DateFormat, string> = {
 };
 
 /** Format a YYYY-MM-DD work date string per the user's preferred display format. */
+const WEEKDAYS_SHORT = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+export function formatWeekday(workDate: string): string {
+  const [y, m, d] = workDate.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return WEEKDAYS_SHORT[new Date(y, m - 1, d).getDay()];
+}
+
 export function formatWorkDate(workDate: string, format: DateFormat = "YYYY-MM-DD"): string {
   const [y, m, d] = workDate.split("-");
   if (!y || !m || !d) return workDate;
@@ -88,4 +96,14 @@ export function formatDuration(totalMinutes: number | null): string {
 export function formatSignedDuration(minutes: number): string {
   const sign = minutes < 0 ? "-" : "+";
   return `${sign}${formatDuration(Math.abs(minutes))}`;
+}
+
+/** Compact signed delta for the list view, e.g. "+5 min", "-1h", "+1h 05m". */
+export function formatOvertime(minutes: number): string {
+  const sign = minutes < 0 ? "-" : "+";
+  const abs = Math.abs(minutes);
+  if (abs < 60) return `${sign}${abs} min`;
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  return m === 0 ? `${sign}${h}h` : `${sign}${h}h ${String(m).padStart(2, "0")}m`;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { DayLabel, DayStatus, TimeEntry } from "../api/types";
+import type { DayLabel, TimeEntry } from "../api/types";
 import DayStatusBadge from "./DayStatusBadge";
 
 function formatElapsed(ms: number): string {
@@ -16,9 +16,7 @@ interface Props {
   onStart: () => void;
   onStop: () => void;
   todayLabel: DayLabel | null;
-  hasEntriesToday: boolean;
   labelBusy: boolean;
-  onSetTodayLabel: (status: DayStatus) => void;
   onRemoveTodayLabel: () => void;
 }
 
@@ -28,9 +26,7 @@ export default function ClockButton({
   onStart,
   onStop,
   todayLabel,
-  hasEntriesToday,
   labelBusy,
-  onSetTodayLabel,
   onRemoveTodayLabel,
 }: Props) {
   const [now, setNow] = useState(Date.now());
@@ -73,16 +69,6 @@ export default function ClockButton({
         <div className="font-mono text-2xl font-semibold text-slate-900 dark:text-neutral-100">
           {openEntry ? formatElapsed(elapsedMs) : "00:00:00"}
         </div>
-        {!openEntry && !hasEntriesToday && (
-          <div className="mt-1.5 flex gap-2">
-            <button onClick={() => onSetTodayLabel("sick")} disabled={labelBusy} className="link-muted disabled:opacity-50">
-              Mark Sick today
-            </button>
-            <button onClick={() => onSetTodayLabel("vacation")} disabled={labelBusy} className="link-muted disabled:opacity-50">
-              Mark Vacation today
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -1,17 +1,28 @@
-import { useState, type ReactNode } from "react";
+import { cloneElement, useState, type ReactElement, type ReactNode } from "react";
 import type { DateFormat, DayLabel, DayStatus, SortOption, Tag, TimeEntry } from "../api/types";
 import { ApiError } from "../api/client";
 import EditableCell from "./EditableCell";
 import TagBadge from "./TagBadge";
 import TagPicker from "./TagPicker";
 import DayStatusBadge from "./DayStatusBadge";
-import { formatDuration, formatWorkDate, isoToLocalTime, localDateTimeToIso, toLocalDateStr } from "../lib/time";
+import { formatDuration, formatOvertime, formatSignedDuration, formatWeekday, formatWorkDate, isoToLocalTime, localDateTimeToIso, toLocalDateStr } from "../lib/time";
 
 interface Props {
   entries: TimeEntry[];
   dayLabels: DayLabel[];
   sort: SortOption;
   dateFormat?: DateFormat;
+  dailyTarget?: number | null;
+  // When set, every date in [from, to] without entries or a label gets a
+  // placeholder row so the list reads as a seamless calendar.
+  emptyDaysRange?: { from: string; to: string } | null;
+  workDays?: number[];
+  sickCountsAsWork?: boolean;
+  // Active date-range bounds and whether a search/tag/status filter is on;
+  // together they decide how far a week's overtime figure can be trusted.
+  filterFrom?: string;
+  filterTo?: string;
+  contentFiltered?: boolean;
   allTags: Tag[];
   onUpdate: (
     id: number,
@@ -31,6 +42,28 @@ interface DayGroup {
   workDate: string;
   entries: TimeEntry[];
   label?: DayLabel;
+  empty?: boolean;
+}
+
+// ISO 8601 week number (weeks start Monday; week 1 contains the year's first Thursday).
+function isoWeek(workDate: string): { year: number; week: number } {
+  const d = new Date(`${workDate}T00:00:00`);
+  d.setDate(d.getDate() + 4 - (((d.getDay() + 6) % 7) + 1));
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  return { year: d.getFullYear(), week: Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7) };
+}
+
+function addEmptyDays(groups: DayGroup[], range: { from: string; to: string }, sort: SortOption): DayGroup[] {
+  const present = new Set(groups.map((g) => g.workDate));
+  const empties: DayGroup[] = [];
+  const end = new Date(`${range.to}T00:00:00`);
+  for (let d = new Date(`${range.from}T00:00:00`); d <= end; d.setDate(d.getDate() + 1)) {
+    const workDate = toLocalDateStr(d);
+    if (!present.has(workDate)) empties.push({ workDate, entries: [], empty: true });
+  }
+  const combined = [...groups, ...empties];
+  combined.sort((a, b) => (sort === "date_asc" ? a.workDate.localeCompare(b.workDate) : b.workDate.localeCompare(a.workDate)));
+  return combined;
 }
 
 // Entries sharing a work date (e.g. a morning shift and an evening shift on
@@ -174,6 +207,21 @@ function AddDayLabelForm({
   );
 }
 
+function OvertimeCell({ minutes, dailyTarget }: { minutes: number | null; dailyTarget: number | null }) {
+  if (dailyTarget === null || minutes === null) return <td className="px-3 py-1" />;
+  const diff = minutes - dailyTarget;
+  if (diff === 0) return <td className="px-3 py-1" />;
+  return (
+    <td
+      className={`px-3 py-1 text-xs font-medium ${
+        diff > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+      }`}
+    >
+      {formatOvertime(diff)}
+    </td>
+  );
+}
+
 // Column definitions are kept in an array (rather than hardcoded JSX) so new
 // columns — e.g. break minutes, overtime flags — can be added later without
 // restructuring the table markup.
@@ -182,6 +230,13 @@ export default function TimeTable({
   dayLabels,
   sort,
   dateFormat = "YYYY-MM-DD",
+  dailyTarget = null,
+  emptyDaysRange = null,
+  workDays = [1, 2, 3, 4, 5],
+  sickCountsAsWork = true,
+  filterFrom = "",
+  filterTo = "",
+  contentFiltered = false,
   allTags,
   onUpdate,
   onDelete,
@@ -192,6 +247,11 @@ export default function TimeTable({
   actions,
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [inlineDate, setInlineDate] = useState<string | null>(null);
+  const [inlineStart, setInlineStart] = useState("09:00");
+  const [inlineEnd, setInlineEnd] = useState("17:00");
+  const [inlineBusy, setInlineBusy] = useState(false);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   function toggleExpanded(workDate: string) {
     setExpanded((prev) => {
@@ -214,6 +274,7 @@ export default function TimeTable({
     }
     return (
       <tr key={entry.id} className={rowClassName}>
+        <td className="px-3 py-1 text-slate-500 dark:text-neutral-400">{grouped ? "" : formatWeekday(entry.workDate)}</td>
         <td className="px-1 py-1">
           {grouped ? (
             <span className="block px-4 py-1 text-xs text-slate-400 dark:text-neutral-500" aria-hidden="true">
@@ -257,6 +318,7 @@ export default function TimeTable({
         <td className="px-3 py-1 font-medium text-slate-700 dark:text-neutral-200">
           {formatDuration(entry.totalMinutes)}
         </td>
+        {grouped ? <td /> : <OvertimeCell minutes={entry.endTime ? entry.totalMinutes : null} dailyTarget={dailyTarget} />}
         <td className="px-1 py-1">
           <EditableCell value={entry.note ?? ""} onSave={(v) => onUpdate(entry.id, { note: v })} placeholder="Add note" />
         </td>
@@ -284,8 +346,9 @@ export default function TimeTable({
     const label = group.label!;
     return (
       <tr key={`label-${group.workDate}`}>
+        <td className="px-3 py-2 text-slate-500 dark:text-neutral-400">{formatWeekday(group.workDate)}</td>
         <td className="px-3 py-2 text-slate-700 dark:text-neutral-200">{formatWorkDate(group.workDate, dateFormat)}</td>
-        <td className="px-3 py-2" colSpan={5}>
+        <td className="px-3 py-2" colSpan={6}>
           <DayStatusBadge status={label.status} />
         </td>
         <td className="px-3 py-2" />
@@ -297,6 +360,139 @@ export default function TimeTable({
             Remove
           </button>
         </td>
+      </tr>
+    );
+  }
+
+  function renderGroup(group: DayGroup) {
+    if (group.empty) return [renderEmptyRow(group)];
+    if (group.label) return [renderLabelRow(group)];
+    if (group.entries.length === 1) return [renderEntryRow(group.entries[0], false)];
+    return [renderGroupSummaryRow(group), ...(expanded.has(group.workDate) ? group.entries.map((e) => renderEntryRow(e, true)) : [])];
+  }
+
+  // Alternating accent per week: a colored left bar on every row, so week
+  // boundaries read at a glance without recoloring the day rows themselves.
+  const WEEK_STYLES = [
+    { bar: "!border-l-4 !border-l-brand-500", label: "text-brand-600 dark:text-brand-400" },
+    { bar: "!border-l-4 !border-l-emerald-500", label: "text-emerald-600 dark:text-emerald-400" },
+  ];
+
+  const todayStr = toLocalDateStr(new Date());
+  const TODAY_CLASS = "!bg-brand-500/15 font-semibold";
+
+  // Total worked time plus credited Sick/Vacation days, and the difference to
+  // the expected time (target x scheduled workdays so far, within the active
+  // date range). Overtime is omitted under content filters, where totals are partial.
+  function weekStats(wk: { year: number; week: number }, groupsInWeek: DayGroup[]) {
+    let minutes = 0;
+    for (const g of groupsInWeek) {
+      for (const e of g.entries) minutes += e.totalMinutes ?? 0;
+      if (g.label && dailyTarget !== null && (g.label.status === "vacation" || sickCountsAsWork)) minutes += dailyTarget;
+    }
+    if (dailyTarget === null || contentFiltered) return { minutes, overtime: null };
+    const monday = new Date(`${groupsInWeek[0].workDate}T00:00:00`);
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    let days = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(d.getDate() + i);
+      const ds = toLocalDateStr(d);
+      if (ds > todayStr || (filterFrom && ds < filterFrom) || (filterTo && ds > filterTo)) continue;
+      if (workDays.includes(i + 1)) days++;
+    }
+    return { minutes, overtime: minutes - dailyTarget * days };
+  }
+
+  function renderWeekRow(wk: { year: number; week: number }, style: (typeof WEEK_STYLES)[number], stats: { minutes: number; overtime: number | null }) {
+    return (
+      <tr key={`week-${wk.year}-${wk.week}`} className={style.bar}>
+        <td colSpan={10} className="px-3 pb-0.5 pt-2.5 text-xs">
+          <div className="flex items-center justify-between gap-3">
+            <span className={`font-semibold uppercase tracking-wide ${style.label}`}>
+              KW {wk.week}
+              {wk.year !== new Date().getFullYear() && <span className="ml-1 font-normal opacity-70">{wk.year}</span>}
+            </span>
+            <span className="flex items-center gap-3 font-medium text-slate-500 dark:text-neutral-400">
+              <span>Total {formatDuration(stats.minutes)}</span>
+              {stats.overtime !== null && (
+                <span className={stats.overtime < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}>
+                  {formatSignedDuration(stats.overtime)}
+                </span>
+              )}
+            </span>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
+
+  async function saveInlineEntry(workDate: string) {
+    setInlineError(null);
+    setInlineBusy(true);
+    try {
+      await onCreateEntry({
+        workDate,
+        startTime: localDateTimeToIso(workDate, inlineStart),
+        endTime: localDateTimeToIso(workDate, inlineEnd),
+      });
+      setInlineDate(null);
+    } catch (err) {
+      setInlineError(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setInlineBusy(false);
+    }
+  }
+
+  function renderEmptyRow(group: DayGroup) {
+    const isoWeekday = ((new Date(`${group.workDate}T00:00:00`).getDay() + 6) % 7) + 1;
+    const offDay = !workDays.includes(isoWeekday);
+    const editing = inlineDate === group.workDate;
+    const rowClass = offDay ? "bg-slate-50/60 dark:bg-neutral-800/20" : "";
+    if (!editing) {
+      return (
+        <tr
+          key={`empty-${group.workDate}`}
+          onClick={() => {
+            setInlineDate(group.workDate);
+            setInlineError(null);
+          }}
+          title="Click to add an entry"
+          className={`cursor-pointer hover:bg-slate-50 dark:hover:bg-neutral-800/50 ${rowClass}`}
+        >
+          <td className="px-3 py-2 text-slate-400 dark:text-neutral-500">{formatWeekday(group.workDate)}</td>
+          <td className="px-3 py-2 text-slate-400 dark:text-neutral-500">{formatWorkDate(group.workDate, dateFormat)}</td>
+          <td className="px-3 py-2 text-slate-400 dark:text-neutral-500" colSpan={6}>
+            {offDay ? "Day off" : "No entries"}
+          </td>
+          <td className="px-3 py-2" />
+          <td className="px-3 py-2" />
+        </tr>
+      );
+    }
+    return (
+      <tr key={`empty-${group.workDate}`} className={rowClass}>
+        <td className="px-3 py-2 text-slate-500 dark:text-neutral-400">{formatWeekday(group.workDate)}</td>
+        <td className="px-3 py-2 text-slate-700 dark:text-neutral-200">{formatWorkDate(group.workDate, dateFormat)}</td>
+        <td className="px-1 py-1">
+          <input type="time" value={inlineStart} onChange={(e) => setInlineStart(e.target.value)} className="field-sm w-full" aria-label="Start time" autoFocus />
+        </td>
+        <td className="px-1 py-1">
+          <input type="time" value={inlineEnd} onChange={(e) => setInlineEnd(e.target.value)} className="field-sm w-full" aria-label="End time" />
+        </td>
+        <td className="px-3 py-1" colSpan={4}>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={inlineBusy} onClick={() => saveInlineEntry(group.workDate)} className="btn-secondary px-2 py-1 text-xs">
+              {inlineBusy ? "Saving..." : "Save"}
+            </button>
+            <button type="button" disabled={inlineBusy} onClick={() => setInlineDate(null)} className="btn-ghost px-2 py-1 text-xs">
+              Cancel
+            </button>
+            {inlineError && <span className="text-xs text-red-600 dark:text-red-400">{inlineError}</span>}
+          </div>
+        </td>
+        <td className="px-3 py-2" />
       </tr>
     );
   }
@@ -320,6 +516,7 @@ export default function TimeTable({
           hasOpenEntry ? "bg-brand-50/50 dark:bg-brand-900/20" : "bg-slate-50/70 dark:bg-neutral-800/30"
         }`}
       >
+        <td className="px-3 py-2 text-slate-500 dark:text-neutral-400">{formatWeekday(group.workDate)}</td>
         <td className="px-3 py-2">
           <span className="inline-flex items-center gap-1.5 text-slate-700 dark:text-neutral-200">
             <svg
@@ -339,6 +536,7 @@ export default function TimeTable({
           {totalBreak > 0 ? `${totalBreak} min` : ""}
         </td>
         <td className="px-3 py-2 text-slate-700 dark:text-neutral-200">{formatDuration(totalMinutes)}</td>
+        <OvertimeCell minutes={hasOpenEntry ? null : totalMinutes} dailyTarget={dailyTarget} />
         <td className="px-3 py-2 text-slate-500 dark:text-neutral-400">
           {noteCount > 0 ? `${noteCount} note${noteCount > 1 ? "s" : ""}` : ""}
         </td>
@@ -354,7 +552,13 @@ export default function TimeTable({
     );
   }
 
-  const groups = mergeDayLabels(groupByDate(entries), dayLabels, sort);
+  let groups = mergeDayLabels(groupByDate(entries), dayLabels, sort);
+  if (emptyDaysRange && (sort === "date_asc" || sort === "date_desc")) {
+    groups = addEmptyDays(groups, emptyDaysRange, sort);
+  }
+
+  // Week boundaries only read correctly when rows are in date order.
+  const weekSeparators = sort === "date_asc" || sort === "date_desc";
 
   return (
     <div className="panel overflow-x-auto">
@@ -366,10 +570,12 @@ export default function TimeTable({
       ) : (
         <table className="min-w-full table-fixed divide-y divide-slate-200 text-sm dark:divide-neutral-800">
           <colgroup>
+            <col className="w-14" />
             <col className="w-32" />
             <col className="w-24" />
             <col className="w-24" />
             <col className="w-24" />
+            <col className="w-20" />
             <col className="w-20" />
             <col />
             <col className="w-40" />
@@ -377,24 +583,46 @@ export default function TimeTable({
           </colgroup>
           <thead className="bg-slate-50 dark:bg-neutral-800/50">
             <tr>
+              <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Day</th>
               <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Date</th>
               <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Start</th>
               <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">End</th>
               <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Break (min)</th>
               <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Total</th>
+              <th className="px-3 py-2.5" />
               <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Note</th>
               <th className="px-3 py-2.5 text-left font-medium text-slate-500 dark:text-neutral-400">Tags</th>
               <th className="px-3 py-2.5" />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-neutral-800">
-            {groups.map((group) =>
-              group.label
-                ? renderLabelRow(group)
-                : group.entries.length === 1
-                  ? renderEntryRow(group.entries[0], false)
-                  : [renderGroupSummaryRow(group), ...(expanded.has(group.workDate) ? group.entries.map((e) => renderEntryRow(e, true)) : [])]
-            )}
+            {(() => {
+              let weekIndex = -1;
+              let prev: { year: number; week: number } | null = null;
+              const weekGroups = new Map<string, DayGroup[]>();
+              for (const g of groups) {
+                const w = isoWeek(g.workDate);
+                const key = `${w.year}-${w.week}`;
+                weekGroups.set(key, [...(weekGroups.get(key) ?? []), g]);
+              }
+              return groups.flatMap((group) => {
+                const wk = isoWeek(group.workDate);
+                const rows = renderGroup(group);
+                if (!weekSeparators) return rows;
+                const newWeek = !prev || prev.year !== wk.year || prev.week !== wk.week;
+                if (newWeek) weekIndex++;
+                prev = wk;
+                const style = WEEK_STYLES[weekIndex % WEEK_STYLES.length];
+                const isToday = group.workDate === todayStr;
+                const styled = rows.map((row) => {
+                  const cls = (row.props as { className?: string }).className ?? "";
+                  return cloneElement(row as ReactElement<{ className?: string }>, {
+                    className: `${cls} ${style.bar} ${isToday ? TODAY_CLASS : ""}`.trim(),
+                  });
+                });
+                return newWeek ? [renderWeekRow(wk, style, weekStats(wk, weekGroups.get(`${wk.year}-${wk.week}`)!)), ...styled] : styled;
+              });
+            })()}
           </tbody>
         </table>
       )}

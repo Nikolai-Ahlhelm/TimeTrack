@@ -53,6 +53,11 @@ export default function CalendarPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState<DayStatus | null>(null);
+  const [bulkFrom, setBulkFrom] = useState("");
+  const [bulkTo, setBulkTo] = useState("");
+  const [bulkSkipWeekends, setBulkSkipWeekends] = useState(true);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
 
   const dateFormat = user?.dateFormat ?? "YYYY-MM-DD";
   const dailyTargetMinutes = user?.dailyTargetMinutes ?? null;
@@ -164,6 +169,47 @@ export default function CalendarPage() {
     }
   }
 
+  function openBulk(status: DayStatus) {
+    const start = selectedDate ?? from;
+    setBulkStatus(status);
+    setBulkFrom(start);
+    setBulkTo(start);
+    setBulkMessage(null);
+    setError(null);
+  }
+
+  async function handleApplyBulk() {
+    if (!bulkStatus) return;
+    if (!bulkFrom || !bulkTo || bulkTo < bulkFrom) {
+      setError("Please choose a valid date range");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setBulkMessage(null);
+    try {
+      const res = await api.dayLabels.setBulk({
+        from: bulkFrom,
+        to: bulkTo,
+        status: bulkStatus,
+        skipWeekends: bulkSkipWeekends,
+      });
+      const labelsRes = await api.dayLabels.list({ from, to });
+      setDayLabels(labelsRes.dayLabels);
+      setBulkMessage(
+        `Marked ${res.applied} day${res.applied === 1 ? "" : "s"} as ${bulkStatus}` +
+          (res.skippedWithEntries > 0
+            ? `; skipped ${res.skippedWithEntries} with time entries`
+            : "")
+      );
+      setBulkStatus(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleCreateEntry(data: { workDate: string; startTime: string; endTime: string; breakMinutes?: number; note?: string }) {
     await api.entries.create(data);
     const [entriesRes, labelsRes] = await Promise.all([
@@ -201,7 +247,13 @@ export default function CalendarPage() {
       <main className="mx-auto max-w-5xl space-y-6 px-4 py-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-semibold text-slate-900 dark:text-neutral-100">Calendar</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => openBulk("vacation")} className="btn-secondary">
+              Bulk Vacation
+            </button>
+            <button onClick={() => openBulk("sick")} className="btn-secondary">
+              Bulk Sick
+            </button>
             <button
               onClick={() => goToMonth(year, month - 1)}
               className="btn-ghost"
@@ -242,6 +294,64 @@ export default function CalendarPage() {
             </button>
           </div>
         </div>
+
+        {bulkMessage && (
+          <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
+            {bulkMessage}
+          </div>
+        )}
+
+        {bulkStatus && (
+          <div className="panel space-y-4 p-5">
+            <div className="flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-neutral-100">
+                Mark multiple days as <DayStatusBadge status={bulkStatus} />
+              </h2>
+              <button onClick={() => setBulkStatus(null)} className="btn-ghost" aria-label="Close">
+                ✕
+              </button>
+            </div>
+            <div className="flex flex-wrap items-end gap-4">
+              <label className="block">
+                <span className="field-label">From</span>
+                <input
+                  type="date"
+                  value={bulkFrom}
+                  onChange={(e) => {
+                    setBulkFrom(e.target.value);
+                    if (bulkTo < e.target.value) setBulkTo(e.target.value);
+                  }}
+                  className="field-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="field-label">To</span>
+                <input
+                  type="date"
+                  value={bulkTo}
+                  min={bulkFrom}
+                  onChange={(e) => setBulkTo(e.target.value)}
+                  className="field-sm"
+                />
+              </label>
+              <label className="flex items-center gap-2 pb-1 text-sm text-slate-700 dark:text-neutral-300">
+                <input
+                  type="checkbox"
+                  checked={bulkSkipWeekends}
+                  onChange={(e) => setBulkSkipWeekends(e.target.checked)}
+                />
+                Skip weekends
+              </label>
+              <button onClick={handleApplyBulk} disabled={busy} className="btn-primary">
+                Apply
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-neutral-400">
+              Days that already have time entries are skipped; existing labels in the range are overwritten.
+            </p>
+            {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="panel p-5">
