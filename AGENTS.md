@@ -18,7 +18,7 @@ through creating the admin account.
 |------------|------------------------------------------------------------------|
 | Backend    | Node.js 22 + TypeScript + Express                                |
 | Database   | SQLite (`better-sqlite3`), file-based, single volume              |
-| Auth       | JWT in an httpOnly cookie, `bcryptjs` password hashing            |
+| Auth       | JWT in an httpOnly cookie, `bcryptjs` password hashing. `requireAuth` also accepts a per-user bearer token (`users.api_token`, self-service via Settings > Automation) for non-browser clients like iOS Shortcuts. |
 | Frontend   | React + Vite + TypeScript + Tailwind CSS + React Router           |
 | Deployment | Single Docker image — Express serves the built React app and the `/api` routes on one port |
 
@@ -145,6 +145,7 @@ databases upgrade automatically without a manual migration step.
 | `GET /api/entries/export.csv`     | CSV export of the current filtered view    | Session     |
 | `GET/POST/PATCH/DELETE /api/users`| Manage user accounts, incl. daily target & default break for others | Admin |
 | `PATCH /api/profile`              | Self-service: display name, own daily target, own default break, password | Session |
+| `GET/POST/DELETE /api/profile/api-token` | View/(re)generate/revoke own automation bearer token | Session |
 | `GET/PATCH /api/settings`         | App-wide settings                          | Admin       |
 
 ## 5. Running the app

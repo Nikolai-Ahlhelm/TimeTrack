@@ -27,10 +27,50 @@ export default function Settings() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [apiToken, setApiToken] = useState<string | null>(null);
+  const [tokenLoading, setTokenLoading] = useState(false);
+  const [tokenCopied, setTokenCopied] = useState<"start" | "stop" | "token" | null>(null);
 
   useEffect(() => {
     api.tags.list().then(({ tags }) => setTags(tags));
+    api.profile.getApiToken().then(({ apiToken }) => setApiToken(apiToken));
   }, []);
+
+  async function generateApiToken() {
+    setTokenLoading(true);
+    setError(null);
+    try {
+      const { apiToken } = await api.profile.generateApiToken();
+      setApiToken(apiToken);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setTokenLoading(false);
+    }
+  }
+
+  async function revokeApiToken() {
+    setTokenLoading(true);
+    setError(null);
+    try {
+      await api.profile.revokeApiToken();
+      setApiToken(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setTokenLoading(false);
+    }
+  }
+
+  function copyToClipboard(text: string, which: "start" | "stop" | "token") {
+    navigator.clipboard?.writeText(text).then(() => {
+      setTokenCopied(which);
+      setTimeout(() => setTokenCopied((c) => (c === which ? null : c)), 1500);
+    });
+  }
+
+  const startUrl = `${window.location.origin}/api/entries/start`;
+  const stopUrl = `${window.location.origin}/api/entries/stop`;
 
   const WEEKDAYS: { value: number; label: string }[] = [
     { value: 1, label: "Mon" },
@@ -303,6 +343,93 @@ export default function Settings() {
 
         <div className="panel p-6">
           <TagManager tags={tags} onChange={setTags} />
+        </div>
+
+        <div className="panel space-y-4 p-6">
+          <div>
+            <h2 className="field-label-lg">Automation (iPhone Shortcuts, etc.)</h2>
+            <p className="mt-1 text-xs text-slate-500 dark:text-neutral-400">
+              Generate a personal token, then have a Shortcuts automation ("When I arrive" / "When I leave" a
+              location) send a web request to clock in or out — no login required. Keep this token secret; anyone
+              with it can clock in/out as you.
+            </p>
+          </div>
+
+          {apiToken ? (
+            <>
+              <div>
+                <label className="field-label">Your token</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <code className="field-sm flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs">
+                    {apiToken}
+                  </code>
+                  <button type="button" onClick={() => copyToClipboard(apiToken, "token")} className="btn-secondary shrink-0">
+                    {tokenCopied === "token" ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="field-label">Clock in — POST</label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="field-sm flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs">
+                      {startUrl}
+                    </code>
+                    <button type="button" onClick={() => copyToClipboard(startUrl, "start")} className="btn-secondary shrink-0">
+                      {tokenCopied === "start" ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="field-label">Clock out — POST</label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="field-sm flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs">
+                      {stopUrl}
+                    </code>
+                    <button type="button" onClick={() => copyToClipboard(stopUrl, "stop")} className="btn-secondary shrink-0">
+                      {tokenCopied === "stop" ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-md bg-slate-50 p-3 text-xs text-slate-600 dark:bg-neutral-800/60 dark:text-neutral-300">
+                <p className="font-medium text-slate-700 dark:text-neutral-200">In the Shortcuts app:</p>
+                <ol className="mt-1 list-decimal space-y-1 pl-4">
+                  <li>Automation → New Automation → Arrive / Leave, pick your workplace, turn off "Ask Before Running".</li>
+                  <li>Add action "Get Contents of URL", paste the Clock in / Clock out URL above.</li>
+                  <li>
+                    Method: <span className="font-medium">POST</span>. Under Headers, add{" "}
+                    <span className="font-medium">Authorization</span> = <span className="font-medium">Bearer &lt;your token&gt;</span>.
+                  </li>
+                  <li>Make one automation for Arrive → Clock in URL, and another for Leave → Clock out URL.</li>
+                </ol>
+                <p className="mt-2">
+                  It's safe to trigger more than once — clocking in while already clocked in (or out while already
+                  out) is ignored with an error response rather than creating a duplicate entry.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button type="button" onClick={generateApiToken} disabled={tokenLoading} className="btn-secondary">
+                  {tokenLoading ? "Working..." : "Regenerate token"}
+                </button>
+                <button
+                  type="button"
+                  onClick={revokeApiToken}
+                  disabled={tokenLoading}
+                  className="text-xs font-medium text-red-600 hover:underline dark:text-red-400"
+                >
+                  Revoke
+                </button>
+              </div>
+            </>
+          ) : (
+            <button type="button" onClick={generateApiToken} disabled={tokenLoading} className="btn-secondary">
+              {tokenLoading ? "Generating..." : "Generate automation token"}
+            </button>
+          )}
         </div>
       </main>
     </div>

@@ -23,6 +23,7 @@ interface Props {
   onCreateTag: (name: string) => Promise<Tag>;
   onSetLabel: (workDate: string, status: DayStatus) => Promise<void>;
   onRemoveLabel: (workDate: string) => void;
+  onCreateEntry: (data: { workDate: string; startTime: string; endTime: string; breakMinutes?: number }) => Promise<void>;
   actions?: ReactNode;
 }
 
@@ -71,14 +72,19 @@ function mergeDayLabels(entryGroups: DayGroup[], dayLabels: DayLabel[], sort: So
 
 function AddDayLabelForm({
   onSetLabel,
+  onCreateEntry,
   actions,
 }: {
   onSetLabel: (workDate: string, status: DayStatus) => Promise<void>;
+  onCreateEntry: (data: { workDate: string; startTime: string; endTime: string; breakMinutes?: number }) => Promise<void>;
   actions?: ReactNode;
 }) {
   const [date, setDate] = useState(() => toLocalDateStr(new Date()));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [addingEntry, setAddingEntry] = useState(false);
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("17:00");
 
   async function handleMark(status: DayStatus) {
     setError(null);
@@ -92,17 +98,75 @@ function AddDayLabelForm({
     }
   }
 
+  async function handleAddEntry() {
+    setError(null);
+    setBusy(true);
+    try {
+      await onCreateEntry({
+        workDate: date,
+        startTime: localDateTimeToIso(date, startTime),
+        endTime: localDateTimeToIso(date, endTime),
+      });
+      setAddingEntry(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-2 text-sm dark:border-neutral-800 dark:bg-neutral-800/30">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-slate-500 dark:text-neutral-400">Mark a day:</span>
+        <span className="text-xs font-medium text-slate-500 dark:text-neutral-400">
+          {addingEntry ? "Add entry:" : "Add a past day:"}
+        </span>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="field-sm" />
-        <button type="button" disabled={busy} onClick={() => handleMark("sick")} className="btn-secondary px-2 py-1 text-xs">
-          Mark Sick
-        </button>
-        <button type="button" disabled={busy} onClick={() => handleMark("vacation")} className="btn-secondary px-2 py-1 text-xs">
-          Mark Vacation
-        </button>
+        {addingEntry ? (
+          <>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              className="field-sm"
+              aria-label="Start time"
+            />
+            <span className="text-slate-400 dark:text-neutral-500">–</span>
+            <input
+              type="time"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              className="field-sm"
+              aria-label="End time"
+            />
+            <button type="button" disabled={busy} onClick={handleAddEntry} className="btn-secondary px-2 py-1 text-xs">
+              {busy ? "Saving..." : "Save"}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setAddingEntry(false);
+                setError(null);
+              }}
+              className="btn-ghost px-2 py-1 text-xs"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" disabled={busy} onClick={() => setAddingEntry(true)} className="btn-secondary px-2 py-1 text-xs">
+              Add entry
+            </button>
+            <button type="button" disabled={busy} onClick={() => handleMark("sick")} className="btn-secondary px-2 py-1 text-xs">
+              Mark Sick
+            </button>
+            <button type="button" disabled={busy} onClick={() => handleMark("vacation")} className="btn-secondary px-2 py-1 text-xs">
+              Mark Vacation
+            </button>
+          </>
+        )}
         {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
       </div>
       {actions}
@@ -124,6 +188,7 @@ export default function TimeTable({
   onCreateTag,
   onSetLabel,
   onRemoveLabel,
+  onCreateEntry,
   actions,
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -293,7 +358,7 @@ export default function TimeTable({
 
   return (
     <div className="panel overflow-x-auto">
-      <AddDayLabelForm onSetLabel={onSetLabel} actions={actions} />
+      <AddDayLabelForm onSetLabel={onSetLabel} onCreateEntry={onCreateEntry} actions={actions} />
       {groups.length === 0 ? (
         <div className="p-8 text-center text-sm text-slate-500 dark:text-neutral-400">
           No entries match the current filters.

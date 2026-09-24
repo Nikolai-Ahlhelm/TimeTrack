@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   work_days TEXT NOT NULL DEFAULT '1,2,3,4,5',  -- comma-separated ISO weekdays (1=Mon..7=Sun) the user is scheduled to work
   date_format TEXT NOT NULL DEFAULT 'YYYY-MM-DD',  -- preferred display format for dates, e.g. 'DD.MM.YYYY'
   sick_counts_as_work INTEGER NOT NULL DEFAULT 1,  -- whether a Sick day is credited with this user's daily target toward worked time/overtime; Vacation always counts
+  api_token TEXT,  -- opaque bearer token for automation (e.g. iOS Shortcuts); NULL = not generated
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

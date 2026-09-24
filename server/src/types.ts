@@ -19,6 +19,7 @@ export interface UserRow {
   work_days: string;
   date_format: string;
   sick_counts_as_work: number;
+  api_token: string | null;
   is_active: number;
   created_at: string;
 }

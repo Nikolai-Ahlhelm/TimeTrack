@@ -180,6 +180,11 @@ export default function Dashboard() {
     await Promise.all([loadFiltered(), loadStats(), loadOpen()]);
   }
 
+  async function handleCreateEntry(data: { workDate: string; startTime: string; endTime: string; breakMinutes?: number }) {
+    await api.entries.create(data);
+    await Promise.all([loadFiltered(), loadStats()]);
+  }
+
   async function handleDelete(id: number) {
     if (!confirm("Delete this time entry?")) return;
     await api.entries.remove(id);
@@ -314,6 +319,7 @@ export default function Dashboard() {
           onCreateTag={handleCreateTag}
           onSetLabel={handleSetDayLabel}
           onRemoveLabel={handleRemoveDayLabel}
+          onCreateEntry={handleCreateEntry}
           actions={<ExportButton filters={filters} />}
         />
       </main>

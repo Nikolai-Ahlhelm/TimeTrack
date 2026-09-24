@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import { db } from "../db/db.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { DATE_FORMATS, toPublicUser, type UserRow } from "../types.js";
@@ -85,4 +86,26 @@ profileRouter.patch("/", (req: AuthedRequest, res) => {
 
   const updated = db.prepare("SELECT * FROM users WHERE id = ?").get(req.user!.id) as UserRow;
   res.json({ user: toPublicUser(updated) });
+});
+
+// Automation token (e.g. for iOS Shortcuts hitting /api/entries/start|stop
+// from a location trigger). Kept out of the regular PublicUser shape — which
+// is returned from /auth/me and the admin user list — so it's only ever
+// visible to the owning user through these dedicated endpoints.
+profileRouter.get("/api-token", (req: AuthedRequest, res) => {
+  const row = db.prepare("SELECT api_token FROM users WHERE id = ?").get(req.user!.id) as {
+    api_token: string | null;
+  };
+  res.json({ apiToken: row.api_token });
+});
+
+profileRouter.post("/api-token", (req: AuthedRequest, res) => {
+  const token = crypto.randomBytes(24).toString("hex");
+  db.prepare("UPDATE users SET api_token = ? WHERE id = ?").run(token, req.user!.id);
+  res.json({ apiToken: token });
+});
+
+profileRouter.delete("/api-token", (req: AuthedRequest, res) => {
+  db.prepare("UPDATE users SET api_token = NULL WHERE id = ?").run(req.user!.id);
+  res.json({ ok: true });
 });

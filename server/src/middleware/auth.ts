@@ -27,21 +27,44 @@ export function clearAuthCookie(res: Response) {
   res.clearCookie(COOKIE_NAME);
 }
 
-export function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
-  const token = req.cookies?.[COOKIE_NAME];
-  if (!token) return res.status(401).json({ error: "Not authenticated" });
+function userFromRow(row: UserRow | undefined): PublicUser | null {
+  if (!row || row.is_active !== 1) return null;
+  return toPublicUser(row);
+}
 
-  try {
-    const payload = jwt.verify(token, JWT_SECRET) as unknown as { sub: number };
-    const row = db.prepare("SELECT * FROM users WHERE id = ?").get(payload.sub) as UserRow | undefined;
-    if (!row || row.is_active !== 1) {
-      return res.status(401).json({ error: "Not authenticated" });
+// Accepts either the browser session cookie (JWT) or a per-user automation
+// bearer token (from Settings > Automation), so endpoints like clock in/out
+// can be triggered from non-browser clients such as iOS Shortcuts.
+export function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
+  const cookieToken = req.cookies?.[COOKIE_NAME];
+  if (cookieToken) {
+    try {
+      const payload = jwt.verify(cookieToken, JWT_SECRET) as unknown as { sub: number };
+      const row = db.prepare("SELECT * FROM users WHERE id = ?").get(payload.sub) as UserRow | undefined;
+      const user = userFromRow(row);
+      if (user) {
+        req.user = user;
+        return next();
+      }
+    } catch {
+      // fall through to bearer-token check
     }
-    req.user = toPublicUser(row);
-    next();
-  } catch {
-    return res.status(401).json({ error: "Not authenticated" });
   }
+
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    const apiToken = authHeader.slice("Bearer ".length).trim();
+    if (apiToken) {
+      const row = db.prepare("SELECT * FROM users WHERE api_token = ?").get(apiToken) as UserRow | undefined;
+      const user = userFromRow(row);
+      if (user) {
+        req.user = user;
+        return next();
+      }
+    }
+  }
+
+  return res.status(401).json({ error: "Not authenticated" });
 }
 
 export function requireAdmin(req: AuthedRequest, res: Response, next: NextFunction) {

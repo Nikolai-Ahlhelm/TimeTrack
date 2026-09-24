@@ -49,6 +49,7 @@ export default function CalendarPage() {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [dayLabels, setDayLabels] = useState<DayLabel[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -80,8 +81,15 @@ export default function CalendarPage() {
 
   useEffect(() => {
     setSelectedDate(null);
+    setShowAddForm(false);
     setError(null);
   }, [year, month]);
+
+  function selectDate(workDate: string, openAddForm = false) {
+    setSelectedDate(workDate);
+    setShowAddForm(openAddForm);
+    setError(null);
+  }
 
   const entriesByDate = useMemo(() => {
     const map = new Map<string, TimeEntry[]>();
@@ -154,6 +162,16 @@ export default function CalendarPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function handleCreateEntry(data: { workDate: string; startTime: string; endTime: string; breakMinutes?: number; note?: string }) {
+    await api.entries.create(data);
+    const [entriesRes, labelsRes] = await Promise.all([
+      api.entries.list({ from, to }),
+      api.dayLabels.list({ from, to }),
+    ]);
+    setEntries(entriesRes.entries);
+    setDayLabels(labelsRes.dayLabels);
   }
 
   async function handleRemoveLabel() {
@@ -267,7 +285,9 @@ export default function CalendarPage() {
               return (
                 <button
                   key={cell.workDate}
-                  onClick={() => setSelectedDate(cell.workDate)}
+                  onClick={() => selectDate(cell.workDate)}
+                  onDoubleClick={() => selectDate(cell.workDate, true)}
+                  title="Double-click to add an entry"
                   className={`relative min-h-24 border-b border-r border-slate-100 p-1.5 pt-7 text-left last:border-r-0 dark:border-neutral-800 ${
                     selected ? "bg-brand-50 dark:bg-brand-900/20" : "hover:bg-slate-50 dark:hover:bg-neutral-800/40"
                   }`}
@@ -315,6 +335,10 @@ export default function CalendarPage() {
             label={labelsByDate.get(selectedDate) ?? null}
             busy={busy}
             error={error}
+            defaultBreakMinutes={user?.defaultBreakMinutes ?? 0}
+            showAddForm={showAddForm}
+            onToggleAddForm={() => setShowAddForm((v) => !v)}
+            onAddEntry={handleCreateEntry}
             onSetLabel={handleSetLabel}
             onRemoveLabel={handleRemoveLabel}
             onClose={() => setSelectedDate(null)}

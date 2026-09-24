@@ -39,8 +39,14 @@ function applyIncrementalMigrations() {
   addColumnIfMissing("users", "date_format", "TEXT NOT NULL DEFAULT 'YYYY-MM-DD'");
   addColumnIfMissing("users", "break_rules", "TEXT");
   addColumnIfMissing("users", "sick_counts_as_work", "INTEGER NOT NULL DEFAULT 1");
+  addColumnIfMissing("users", "api_token", "TEXT");
   addColumnIfMissing("time_entries", "break_minutes", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing("tags", "icon", "TEXT");
+
+  // Partial unique index (not expressible as an inline column constraint added
+  // via ALTER TABLE) enforcing token uniqueness only among users that have
+  // generated one.
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_api_token ON users(api_token) WHERE api_token IS NOT NULL");
 }
 
 export function runMigrations() {

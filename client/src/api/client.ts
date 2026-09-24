@@ -55,6 +55,14 @@ export const api = {
     todayOpen: () => request<{ entry: TimeEntry | null }>("/entries/today-open"),
     start: () => request<{ entry: TimeEntry }>("/entries/start", { method: "POST" }),
     stop: () => request<{ entry: TimeEntry }>("/entries/stop", { method: "POST" }),
+    create: (data: {
+      workDate: string;
+      startTime: string;
+      endTime: string;
+      breakMinutes?: number;
+      note?: string;
+      tagIds?: number[];
+    }) => request<{ entry: TimeEntry }>("/entries", { method: "POST", body: JSON.stringify(data) }),
     update: (
       id: number,
       data: Partial<Pick<TimeEntry, "workDate" | "startTime" | "endTime" | "breakMinutes" | "note">> & {
@@ -114,6 +122,9 @@ export const api = {
       sickCountsAsWork?: boolean;
       password?: string;
     }) => request<{ user: User }>("/profile", { method: "PATCH", body: JSON.stringify(data) }),
+    getApiToken: () => request<{ apiToken: string | null }>("/profile/api-token"),
+    generateApiToken: () => request<{ apiToken: string }>("/profile/api-token", { method: "POST" }),
+    revokeApiToken: () => request<{ ok: true }>("/profile/api-token", { method: "DELETE" }),
   },
   settings: {
     get: () => request<{ settings: Record<string, string> }>("/settings"),

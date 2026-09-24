@@ -204,6 +204,57 @@ entriesRouter.post("/stop", (req: AuthedRequest, res) => {
   res.json({ entry: toPublicEntries([row])[0] });
 });
 
+// Manual creation of a past (or otherwise not-currently-open) entry — distinct
+// from /start, which always stamps "now" and leaves end_time open. endTime is
+// required here so a manually-added entry can never collide with /start's
+// "you already have an open entry" check.
+entriesRouter.post("/", (req: AuthedRequest, res) => {
+  const { workDate, startTime, endTime, breakMinutes, note, tagIds } = req.body ?? {};
+
+  if (typeof workDate !== "string" || !workDate) {
+    return res.status(400).json({ error: "workDate is required" });
+  }
+  if (typeof startTime !== "string" || !startTime) {
+    return res.status(400).json({ error: "startTime is required" });
+  }
+  if (typeof endTime !== "string" || !endTime) {
+    return res.status(400).json({ error: "endTime is required" });
+  }
+
+  const label = dayLabelOn(req.user!.id, workDate);
+  if (label) {
+    return res.status(409).json({ error: `That day is marked as ${label.status} — remove that label first` });
+  }
+  if (new Date(endTime).getTime() < new Date(startTime).getTime()) {
+    return res.status(400).json({ error: "End time cannot be before start time" });
+  }
+
+  const nextBreakMinutes = breakMinutes !== undefined ? Number(breakMinutes) : req.user!.defaultBreakMinutes;
+  if (!Number.isFinite(nextBreakMinutes) || nextBreakMinutes < 0) {
+    return res.status(400).json({ error: "Break minutes must be a non-negative number" });
+  }
+  const grossMinutes = Math.round((new Date(endTime).getTime() - new Date(startTime).getTime()) / 60000);
+  if (nextBreakMinutes > grossMinutes) {
+    return res.status(400).json({ error: "Break time cannot exceed the worked duration" });
+  }
+  if (tagIds !== undefined && (!Array.isArray(tagIds) || tagIds.some((t: unknown) => !Number.isInteger(t)))) {
+    return res.status(400).json({ error: "tagIds must be an array of tag ids" });
+  }
+
+  const info = db
+    .prepare(
+      "INSERT INTO time_entries (user_id, work_date, start_time, end_time, break_minutes, note) VALUES (?, ?, ?, ?, ?, ?)"
+    )
+    .run(req.user!.id, workDate, startTime, endTime, nextBreakMinutes, note || null);
+
+  if (tagIds !== undefined) {
+    setEntryTags(info.lastInsertRowid as number, tagIds as number[], req.user!.id);
+  }
+
+  const row = db.prepare("SELECT * FROM time_entries WHERE id = ?").get(info.lastInsertRowid) as TimeEntryRow;
+  res.status(201).json({ entry: toPublicEntries([row])[0] });
+});
+
 entriesRouter.patch("/:id", (req: AuthedRequest, res) => {
   const id = Number(req.params.id);
   const row = db.prepare("SELECT * FROM time_entries WHERE id = ?").get(id) as TimeEntryRow | undefined;
